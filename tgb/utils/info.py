@@ -51,6 +51,7 @@ DATA_VERSION_DICT = {
 #"tgbl-flight-v1": "https://object-arbutus.cloud.computecanada.ca/tgb/tgbl-flight.zip",
 
 DATA_EVAL_METRIC_DICT = {
+    "er-p1-simple": "mrr",
     "tgbl-wiki": "mrr",
     "tgbl-review": "mrr",
     "tgbl-coin": "mrr",

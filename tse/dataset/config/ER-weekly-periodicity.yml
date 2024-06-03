@@ -1,0 +1,26 @@
+---
+# Erdos-Renyi data generation which models weekly periodicity
+save_dir: "../data"
+data:
+  - name: ER-P1-simple # name of the dataset
+    seed: 1234
+    num_nodes: 200
+    duration: 182 # days
+    directed: True # Whether the graph should be directed or not
+    num_neg_edge: 10 # Number of sampled negative edges per positive edge
+    val_split: 0.15 # The validation portion
+    test_split: 0.15 # The test portion
+    p: [0.02, 0.02, 0.02, 0.02, 0.02, 0.07, 0.07] # the (uniform) probability that entities within a community will talk to each other at least once per day
+    verbose: False # If True, then display seven samples during the week.
+
+  - name: ER-P1-complex
+    num_nodes: 200
+    seed: 2453
+    directed: True
+    num_neg_edge: 10
+    val_split: 0.15
+    test_split: 0.15
+    duration: 182
+    p: [0.02, 0.04, 0.04, 0.04, 0.05, 0.06, 0.07]
+    verbose: False
+    
