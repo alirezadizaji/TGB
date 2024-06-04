@@ -5,22 +5,19 @@ from importlib import import_module
 import os
 import random
 import pickle
-import time
-from tqdm import tqdm
+import sys
 from types import SimpleNamespace
 import yaml
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-import torch
-from torch_geometric.utils import to_dense_adj
 
-from tse.dataset.negative_sampler import gen_neg_dst
+from .negative_sampler import gen_neg_dst
 
 def main():
     yaml_fname = "deterministic-periodicity.yml"
-    with open(f"./config/{yaml_fname}", "r") as f:
+    with open(f"{sys.argv[1]}/{yaml_fname}", "r") as f:
         config = yaml.safe_load(f)
         config = SimpleNamespace(**config)
 
@@ -61,11 +58,12 @@ def main():
         t = np.empty_like(src)
         edge_feat = np.empty_like(src)
 
-        # Generate for only one week, then repeat the pattern
+        # Generate for only one week
         for day in range(7):
             G = day_sample[day]
 
             if verbose:
+                print("Visualizing...")
                 pos = nx.kamada_kawai_layout(G)
                 nx.draw_networkx_edges(G, pos)
                 nx.draw_networkx_nodes(G, pos, node_size=10)
@@ -85,19 +83,21 @@ def main():
         one_week_num_samples = t.size
 
         # repeat generated samples in multiple weeks + 2 additional weeks (1 for val, 1 for test)
-        rest_num_weeks =  ((train_num_weeks + 2) - 1)
-        src = np.tile(src, rest_num_weeks)
-        dst = np.tile(dst, rest_num_weeks)
-        edge_feat = np.tile(edge_feat, rest_num_weeks)
+        all_weeks =  train_num_weeks + 2
+        src = np.tile(src, all_weeks)
+        dst = np.tile(dst, all_weeks)
+        edge_feat = np.tile(edge_feat, all_weeks)
         ## DO NOT REORDER FOLLOWING LINES
-        start = np.arange(rest_num_weeks + 1) * 7
+        start = np.arange(all_weeks) * 7
         start = np.repeat(start, t.size)
+        t = np.tile(t, all_weeks)
         t = t + start
 
         sample_id = np.arange(t.size)
-        test_mask = np.roll(sample_id <= one_week_num_samples, -one_week_num_samples)
+        test_mask = np.roll(sample_id < one_week_num_samples, -one_week_num_samples)
         val_mask = np.roll(test_mask, -one_week_num_samples)
         train_mask = (1 - val_mask - test_mask) == 1
+
         val_ns = gen_neg_dst(src[val_mask], dst[val_mask], t[val_mask], num_nodes, num_neg_edges)
         test_ns = gen_neg_dst(src[test_mask], dst[test_mask], t[test_mask], num_nodes, num_neg_edges)
 
@@ -112,6 +112,7 @@ def main():
             t=t,
             edge_feat=edge_feat,
             node_feat=node_feat,
+            train_mask=train_mask,
             val_mask=val_mask,
             test_mask=test_mask)
 
@@ -124,5 +125,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

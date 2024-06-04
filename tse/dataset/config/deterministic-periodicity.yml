@@ -1,24 +1,24 @@
 ---
 # Configuration for generating determinstic weekly periodic dataset 
-save_dir: "../data"
+save_dir: "./data"
 data:
   - name: ER-HK # name of the dataset
     seed: 1234
-    num_nodes: 50
+    num_nodes: &n 50
     train_num_weeks: 20 # Number of weeks to replicate the determinstic pattern 
     directed: True # Whether the graph should be directed or not
     num_neg_edge: 10 # Number of sampled negative edges per positive edge; If null, then consider all negatives
-    verbose: False # If True, then display seven samples during the week.
+    verbose: True # If True, then display seven samples during the week.
     graphs: # The "Deterministic" graph patterns that appear during weekdays. For full list of graph generations by networkx, checkout this https://networkx.org/documentation/stable/reference/generators.html
       - days: [0, 1, 2, 3, 4]
         pattern: erdos_renyi_graph
         params:
-          n: "{{ num_nodes }}"
-          p: 0.4
+          n: *n
+          p: 0.06
       - days: [5, 6]
         pattern: powerlaw_cluster_graph
         params:
-          n: "{{ num_nodes }}"
+          n: *n
           m: 4
-          p: 0.01
+          p: 0.05
     

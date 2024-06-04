@@ -1,4 +1,4 @@
-import tqdm
+from tqdm import tqdm
 from typing import Optional
 
 import numpy as np
@@ -11,7 +11,8 @@ def gen_neg_dst(src: np.ndarray,
     """ It generates negative samples per each existing edge in a temporal graph """
     neg_dst = dict()
     n_id = np.arange(num_nodes)
-    for pos_src, pos_dst, t_i in tqdm(zip(src, dst, t)):
+
+    for pos_src, pos_dst, t_i in tqdm(zip(src, dst, t), total=len(src)):
         key = (pos_src, pos_dst, t_i)
         if key in neg_dst:
             raise Exception(f"Duplicated edge {key}")
