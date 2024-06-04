@@ -1,24 +1,61 @@
 ---
 # Configuration for generating determinstic weekly periodic dataset 
-save_dir: "./data"
 data:
+  
   - name: ER-HK # name of the dataset
     seed: 1234
     num_nodes: &n 50
     train_num_weeks: 20 # Number of weeks to replicate the determinstic pattern 
-    directed: True # Whether the graph should be directed or not
+    directed: False # Whether the graph should be directed or not
     num_neg_edge: 10 # Number of sampled negative edges per positive edge; If null, then consider all negatives
-    verbose: True # If True, then display seven samples during the week.
+    verbose: False # If True, then display seven samples during the week.
     graphs: # The "Deterministic" graph patterns that appear during weekdays. For full list of graph generations by networkx, checkout this https://networkx.org/documentation/stable/reference/generators.html
       - days: [0, 1, 2, 3, 4]
         pattern: erdos_renyi_graph
         params:
           n: *n
           p: 0.06
+          directed: False
       - days: [5, 6]
         pattern: powerlaw_cluster_graph
         params:
           n: *n
           m: 4
           p: 0.05
+
+  - name: star-tree
+    seed: 2453
+    num_nodes: &n2 50
+    train_num_weeks: 20 
+    directed: False
+    num_neg_edge: 10
+    verbose: True
+    graphs:
+      - days: [0, 1, 2, 3, 4]
+        pattern: full_rary_tree
+        params:
+          n: *n2
+          r: 2
+      - days: [5, 6]
+        pattern: star_graph
+        params:
+          n: *n2
+
+  - name: cycle-path
+    seed: 23423
+    num_nodes: &n3 50
+    train_num_weeks: 20 
+    directed: False
+    num_neg_edge: 10
+    verbose: True
+    graphs:
+      - days: [0, 1, 2, 3, 4]
+        pattern: path_graph
+        params:
+          n: *n3
+      - days: [5, 6]
+        pattern: cycle_graph
+        params:
+          n: *n3  
+
     

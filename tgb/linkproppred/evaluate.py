@@ -5,7 +5,7 @@ Evaluator Module for Dynamic Link Prediction
 import numpy as np
 from sklearn.metrics import *
 import math
-from tgb.utils.info import DATA_EVAL_METRIC_DICT
+from ...tgb.utils.info import DATA_EVAL_METRIC_DICT
 
 
 
@@ -27,8 +27,8 @@ class Evaluator(object):
         self.name = name
         self.k_value = k_value  # for computing `hits@k`
         self.valid_metric_list = ['hits@', 'mrr']
-        if self.name not in DATA_EVAL_METRIC_DICT:
-            raise NotImplementedError("Dataset not supported")
+        # if self.name not in DATA_EVAL_METRIC_DICT:
+        #     raise NotImplementedError("Dataset not supported")
     
     def _parse_and_check_input(self, input_dict):
         r"""

@@ -7,24 +7,20 @@ command for an example run:
     python examples/linkproppred/tgbl-flight/tgn.py --data "tgbl-flight" --num_run 1 --seed 1
 """
 
-import math
 import timeit
-
+import sys
 import os
 import os.path as osp
 from pathlib import Path
 import numpy as np
 
 import torch
-from sklearn.metrics import average_precision_score, roc_auc_score
-from torch.nn import Linear
 
-from torch_geometric.datasets import JODIEDataset
 from torch_geometric.loader import TemporalDataLoader
-
-from torch_geometric.nn import TransformerConv
+from torch_geometric.data import TemporalData
 
 # internal imports
+from ....tgb.linkproppred.negative_sampler import NegativeEdgeSampler
 from ....tgb.utils.utils import get_args, set_random_seed, save_results
 from ....tgb.linkproppred.evaluate import Evaluator
 from ....modules.decoder import LinkPredictor
@@ -34,7 +30,6 @@ from ....modules.msg_agg import LastAggregator
 from ....modules.neighbor_loader import LastNeighborLoader
 from ....modules.memory_module import TGNMemory
 from ....modules.early_stopping import  EarlyStopMonitor
-from ....tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 
 
 # ==========
@@ -188,10 +183,15 @@ def test(loader, neg_sampler, split_mode):
 start_overall = timeit.default_timer()
 
 # ========== set parameters...
-args, _ = get_args()
+args, _, parser = get_args(return_parser=True)
+
+# Adding custom arguments
+parser.add_argument('-l', '--data-loc', type=str, help='The location where data is stored.')
+args = parser.parse_args()
+
 print("INFO: Arguments:", args)
 
-DATA = "tgbl-flight"
+DATA = args.data
 LR = args.lr
 BATCH_SIZE = args.bs
 K_VALUE = args.k_value  
@@ -205,6 +205,9 @@ PATIENCE = args.patience
 NUM_RUNS = args.num_run
 NUM_NEIGHBORS = 10
 
+# Custom variables
+DATA_LOC = args.data_loc
+
 
 MODEL_NAME = 'TGN'
 # ==========
@@ -213,18 +216,29 @@ MODEL_NAME = 'TGN'
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # data loading
-dataset = PyGLinkPropPredDataset(name=DATA, root="datasets")
-train_mask = dataset.train_mask
-val_mask = dataset.val_mask
-test_mask = dataset.test_mask
-data = dataset.get_TemporalData()
+assert os.path.exists(args.data_loc), f"The given data location does not exist: {args.data_loc}"
+data = np.load(os.path.join(DATA_LOC, DATA, "data.npz"))
+src = torch.tensor(data["src"])
+dst = torch.tensor(data["dst"])
+t = torch.tensor(data["t"])
+edge_feat = torch.tensor(data["edge_feat"])
+node_feat = torch.tensor(data["node_feat"])
+train_mask = list(data["train_mask"])
+val_mask = list(data["val_mask"])
+test_mask = list(data["test_mask"])
+
+data = TemporalData(
+    src=src,
+    dst=dst,
+    t=t,
+    msg=edge_feat)
+
 data = data.to(device)
-metric = dataset.eval_metric
+metric = "mrr"
 
 train_data = data[train_mask]
 val_data = data[val_mask]
 test_data = data[test_mask]
-
 train_loader = TemporalDataLoader(train_data, batch_size=BATCH_SIZE)
 val_loader = TemporalDataLoader(val_data, batch_size=BATCH_SIZE)
 test_loader = TemporalDataLoader(test_data, batch_size=BATCH_SIZE)
@@ -273,7 +287,7 @@ print(f"=================*** {MODEL_NAME}: LinkPropPred: {DATA} ***=============
 print("==========================================================")
 
 evaluator = Evaluator(name=DATA)
-neg_sampler = dataset.negative_sampler
+neg_sampler = NegativeEdgeSampler(dataset_name=DATA)
 
 # for saving the results...
 results_path = f'{osp.dirname(osp.abspath(__file__))}/saved_results'
@@ -300,7 +314,7 @@ for run_idx in range(NUM_RUNS):
 
     # ==================================================== Train & Validation
     # loading the validation negative samples
-    dataset.load_val_ns()
+    neg_sampler.load_eval_set(os.path.join(DATA_LOC, DATA, "val_ns.pkl"), split_mode="val")
 
     val_perf_list = []
     train_times_l, val_times_l = [], []
@@ -352,7 +366,8 @@ for run_idx in range(NUM_RUNS):
     early_stopper.load_checkpoint(model)
 
     # loading the test negative samples
-    dataset.load_test_ns()
+    neg_sampler.load_eval_set(os.path.join(DATA_LOC, DATA, "test_ns.pkl"), split_mode="test")
+
 
     # final testing
     start_test = timeit.default_timer()

@@ -41,7 +41,7 @@ def find_nearest(array, value):
     return array[idx]
 
 
-def get_args():
+def get_args(return_parser=False):
     parser = argparse.ArgumentParser('*** TGB ***')
     parser.add_argument('-d', '--data', type=str, help='Dataset name', default='tgbl-wiki')
     parser.add_argument('--lr', type=float, help='Learning rate', default=1e-4)
@@ -57,10 +57,13 @@ def get_args():
     parser.add_argument('--num_run', type=int, help='Number of iteration runs', default=1)
 
     try:
-        args = parser.parse_args()
+        args = parser.parse_known_args()[0]
     except:
         parser.print_help()
         sys.exit(0)
+        
+    if return_parser:
+        return args, sys.argv, parser
     return args, sys.argv
 
 

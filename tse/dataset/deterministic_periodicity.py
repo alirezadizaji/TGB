@@ -1,6 +1,7 @@
 """ This file generates datasets which models weekly periodicity structure in temporal graphs.
 """
 
+import argparse
 from importlib import import_module
 import os
 import random
@@ -15,9 +16,18 @@ import numpy as np
 
 from .negative_sampler import gen_neg_dst
 
+def _get_args(return_parser=False):
+    parser = argparse.ArgumentParser('*** TGB ***')
+    parser.add_argument('-c', '--conf-dir', type=str, help='Configuration directory for graph generation')
+    parser.add_argument('-s', '--save-dir', type=str, help='Save directory', default=1e-4)
+
+    args = parser.parse_args()
+    return args
+
 def main():
+    args = _get_args()
     yaml_fname = "deterministic-periodicity.yml"
-    with open(f"{sys.argv[1]}/{yaml_fname}", "r") as f:
+    with open(os.path.join(args.conf_dir, yaml_fname), "r") as f:
         config = yaml.safe_load(f)
         config = SimpleNamespace(**config)
 
@@ -28,9 +38,14 @@ def main():
             train_num_weeks = data["train_num_weeks"]
             seed = data["seed"]
             verbose = data["verbose"]
-            directed = data["directed"]
             num_neg_edges = data["num_neg_edge"]
             graphs = data["graphs"]
+        
+            fdir = os.path.join(args.save_dir, name)
+            if os.path.exists(fdir):
+                print(f"\n\n=====> Skipping Data generation for {name}. Delete this directory {fdir} for regeneration", flush=True)
+                continue
+        
         except Exception as e:
             raise ValueError(f"Invalid configuration for {yaml_fname}. {e}")
         
@@ -84,13 +99,13 @@ def main():
 
         # repeat generated samples in multiple weeks + 2 additional weeks (1 for val, 1 for test)
         all_weeks =  train_num_weeks + 2
-        src = np.tile(src, all_weeks)
-        dst = np.tile(dst, all_weeks)
-        edge_feat = np.tile(edge_feat, all_weeks)
+        src = np.tile(src, all_weeks).astype(np.int64)
+        dst = np.tile(dst, all_weeks).astype(np.int64)
+        edge_feat = np.tile(edge_feat, all_weeks)[:, np.newaxis].astype(np.float32)
         ## DO NOT REORDER FOLLOWING LINES
         start = np.arange(all_weeks) * 7
         start = np.repeat(start, t.size)
-        t = np.tile(t, all_weeks)
+        t = np.tile(t, all_weeks).astype(np.int64)
         t = t + start
 
         sample_id = np.arange(t.size)
@@ -101,12 +116,11 @@ def main():
         val_ns = gen_neg_dst(src[val_mask], dst[val_mask], t[val_mask], num_nodes, num_neg_edges)
         test_ns = gen_neg_dst(src[test_mask], dst[test_mask], t[test_mask], num_nodes, num_neg_edges)
 
-        node_feat = np.ones((num_nodes, 1))
+        node_feat = np.ones((num_nodes, 1)).astype(np.float32)
 
-        save_dir = os.path.join(config.save_dir, name)
-        os.makedirs(save_dir, exist_ok=True)
+        os.makedirs(fdir, exist_ok=True)
 
-        np.savez_compressed(os.path.join(save_dir, "data.npz"), 
+        np.savez_compressed(os.path.join(fdir, "data.npz"), 
             src=src, 
             dst=dst, 
             t=t,
@@ -116,10 +130,10 @@ def main():
             val_mask=val_mask,
             test_mask=test_mask)
 
-        with open(os.path.join(save_dir, 'val_ns.pkl'), 'wb') as handle:
+        with open(os.path.join(fdir, 'val_ns.pkl'), 'wb') as handle:
             pickle.dump(val_ns, handle, protocol=pickle.HIGHEST_PROTOCOL) 
         
-        with open(os.path.join(save_dir, 'test_ns.pkl'), 'wb') as handle2:
+        with open(os.path.join(fdir, 'test_ns.pkl'), 'wb') as handle2:
             pickle.dump(test_ns, handle2, protocol=pickle.HIGHEST_PROTOCOL)
 
 

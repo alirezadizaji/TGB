@@ -7,22 +7,22 @@ import zipfile
 import requests
 from clint.textui import progress
 
-from tgb.linkproppred.negative_sampler import NegativeEdgeSampler
-from tgb.utils.info import (
+from ...tgb.linkproppred.negative_sampler import NegativeEdgeSampler
+from ...tgb.utils.info import (
     PROJ_DIR, 
     DATA_URL_DICT, 
     DATA_VERSION_DICT, 
     DATA_EVAL_METRIC_DICT, 
     BColors
 )
-from tgb.utils.pre_process import (
+from ...tgb.utils.pre_process import (
     csv_to_pd_data,
     process_node_feat,
     csv_to_pd_data_sc,
     csv_to_pd_data_rc,
     load_edgelist_wiki,
 )
-from tgb.utils.utils import save_pkl, load_pkl
+from ...tgb.utils.utils import save_pkl, load_pkl
 
 
 class LinkPropPredDataset(object):

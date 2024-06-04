@@ -2,8 +2,8 @@ import torch
 from typing import Optional, Optional, Callable
 
 from torch_geometric.data import Dataset, TemporalData
-from tgb.linkproppred.dataset import LinkPropPredDataset
-from tgb.linkproppred.negative_sampler import NegativeEdgeSampler
+from ...tgb.linkproppred.dataset import LinkPropPredDataset
+from ...tgb.linkproppred.negative_sampler import NegativeEdgeSampler
 import warnings
 
 

@@ -19,7 +19,7 @@ def gen_neg_dst(src: np.ndarray,
         
         pos_dsts_same_src = dst[np.logical_and(src == pos_src, t_i == t)]
         nn_id = np.setdiff1d(n_id, pos_dsts_same_src)
-        if num_neg_edges is None:
+        if num_neg_edges is None or num_neg_edges >= nn_id.size:
             neg_dst[key] = nn_id
         else:
             neg_dst[key] = np.random.choice(nn_id, size=num_neg_edges, replace=False)
