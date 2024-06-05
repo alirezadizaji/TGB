@@ -123,7 +123,7 @@ def test_one_vs_many(loader, neg_sampler, split_mode):
                     axis=0,
                 ),
                 device=device,
-            )
+            ).long()
 
             n_id = torch.cat([src, dst]).unique()
             n_id, edge_index, e_id = neighbor_loader(n_id)
