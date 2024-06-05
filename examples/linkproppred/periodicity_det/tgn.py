@@ -217,15 +217,15 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # data loading
 assert os.path.exists(args.data_loc), f"The given data location does not exist: {args.data_loc}"
-data = np.load(os.path.join(DATA_LOC, DATA, "data.npz"))
-src = torch.tensor(data["src"])
-dst = torch.tensor(data["dst"])
-t = torch.tensor(data["t"])
-edge_feat = torch.tensor(data["edge_feat"])
-node_feat = torch.tensor(data["node_feat"])
-train_mask = list(data["train_mask"])
-val_mask = list(data["val_mask"])
-test_mask = list(data["test_mask"])
+data_np = np.load(os.path.join(DATA_LOC, DATA, "data.npz"))
+src = torch.tensor(data_np["src"])
+dst = torch.tensor(data_np["dst"])
+t = torch.tensor(data_np["t"])
+edge_feat = torch.tensor(data_np["edge_feat"])
+node_feat = torch.tensor(data_np["node_feat"])
+train_mask = list(data_np["train_mask"])
+val_mask = list(data_np["val_mask"])
+test_mask = list(data_np["test_mask"])
 
 data = TemporalData(
     src=src,

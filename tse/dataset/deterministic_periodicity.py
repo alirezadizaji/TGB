@@ -8,15 +8,19 @@ import random
 import pickle
 import sys
 from types import SimpleNamespace
+import torch
 import yaml
 
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
+from torch_geometric.data import TemporalData
+
+from ...tgb.linkproppred.negative_generator import NegativeEdgeGenerator
 
 from .negative_sampler import gen_neg_dst
 
-def _get_args(return_parser=False):
+def _get_args():
     parser = argparse.ArgumentParser('*** TGB ***')
     parser.add_argument('-c', '--conf-dir', type=str, help='Configuration directory for graph generation')
     parser.add_argument('-s', '--save-dir', type=str, help='Save directory', default=1e-4)
@@ -25,9 +29,12 @@ def _get_args(return_parser=False):
     return args
 
 def main():
+    """ This function generates synthetic temporal data which models (weekly) periodicity, using determinstic patterns. 
+    The negative edge sampling method is adopted from TGB framework by Huang et al (2023).
+    """
     args = _get_args()
-    yaml_fname = "deterministic-periodicity.yml"
-    with open(os.path.join(args.conf_dir, yaml_fname), "r") as f:
+    
+    with open(args.conf_dir, "r") as f:
         config = yaml.safe_load(f)
         config = SimpleNamespace(**config)
 
@@ -38,7 +45,7 @@ def main():
             train_num_weeks = data["train_num_weeks"]
             seed = data["seed"]
             verbose = data["verbose"]
-            num_neg_edges = data["num_neg_edge"]
+            neg_sampling = data["neg_sampling"]
             graphs = data["graphs"]
         
             fdir = os.path.join(args.save_dir, name)
@@ -47,7 +54,7 @@ def main():
                 continue
         
         except Exception as e:
-            raise ValueError(f"Invalid configuration for {yaml_fname}. {e}")
+            raise ValueError(f"Invalid configuration for {args.conf_dir}. {e}")
         
         random.seed(seed)
         np.random.seed(seed)
@@ -113,13 +120,65 @@ def main():
         val_mask = np.roll(test_mask, -one_week_num_samples)
         train_mask = (1 - val_mask - test_mask) == 1
 
-        val_ns = gen_neg_dst(src[val_mask], dst[val_mask], t[val_mask], num_nodes, num_neg_edges)
-        test_ns = gen_neg_dst(src[test_mask], dst[test_mask], t[test_mask], num_nodes, num_neg_edges)
+        data = TemporalData(
+            src=torch.tensor(src),
+            dst=torch.tensor(dst),
+            t=torch.tensor(t),
+            msg=torch.tensor(edge_feat))
+
+        data_splits = {}
+        data_splits['train'] = data[torch.tensor(train_mask)]
+        data_splits['val'] = data[torch.tensor(val_mask)]
+        data_splits['test'] = data[torch.tensor(test_mask)]
+
+        # Ensure to only sample actual destination nodes as negatives.
+        min_dst_idx, max_dst_idx = int(data.dst.min()), int(data.dst.max())
+
+        # After successfully loading the dataset...
+        if neg_sampling["strategy"] == "hist_rnd":
+            historical_data = data_splits["train"]
+        else:
+            historical_data = None
+        neg_generator = NegativeEdgeGenerator(
+            dataset_name=name,
+            first_dst_id=min_dst_idx,
+            last_dst_id=max_dst_idx,
+            num_neg_e=neg_sampling["num_neg_edge"],
+            strategy=neg_sampling["strategy"],
+            rnd_seed=seed,
+            historical_data=historical_data,
+        )
+
+
+        # generate validation negative edge set
+        os.makedirs(fdir, exist_ok=True)
+        import time
+        start_time = time.time()
+        split_mode = "val"
+        print(
+            f"INFO: Start generating negative samples: {split_mode} --- {neg_sampling['strategy']}"
+        )
+        neg_generator.generate_negative_samples(
+            data=data_splits[split_mode], split_mode=split_mode, partial_path=fdir
+        )
+        print(
+            f"INFO: End of negative samples generation. Elapsed Time (s): {time.time() - start_time: .4f}"
+        )
+
+        # generate test negative edge set
+        start_time = time.time()
+        split_mode = "test"
+        print(
+            f"INFO: Start generating negative samples: {split_mode} --- {neg_sampling['strategy']}"
+        )
+        neg_generator.generate_negative_samples(
+            data=data_splits[split_mode], split_mode=split_mode, partial_path=fdir
+        )
+        print(
+            f"INFO: End of negative samples generation. Elapsed Time (s): {time.time() - start_time: .4f}"
+        )
 
         node_feat = np.ones((num_nodes, 1)).astype(np.float32)
-
-        os.makedirs(fdir, exist_ok=True)
-
         np.savez_compressed(os.path.join(fdir, "data.npz"), 
             src=src, 
             dst=dst, 
@@ -129,12 +188,6 @@ def main():
             train_mask=train_mask,
             val_mask=val_mask,
             test_mask=test_mask)
-
-        with open(os.path.join(fdir, 'val_ns.pkl'), 'wb') as handle:
-            pickle.dump(val_ns, handle, protocol=pickle.HIGHEST_PROTOCOL) 
-        
-        with open(os.path.join(fdir, 'test_ns.pkl'), 'wb') as handle2:
-            pickle.dump(test_ns, handle2, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == "__main__":

@@ -4,10 +4,13 @@ data:
   
   - name: ER-HK # name of the dataset
     seed: 1234
-    num_nodes: &n 50
+    neg_sampling:   # Configuration for negative edge sampling for test and validation sets.
+      strategy: hist_rnd # (CURRENTLY) TGB supports "hist_rnd" and "rnd" methods for negative edge sampling.
+      hist_ratio: 0.5 # The ratio of negative edges to be sampled from historical data, and the rest randomly
+      num_neg_edge: 10 # Number of sampled negative edges per positive edge; To consider all negatives, give a random big number i.e. 1e9
+    num_nodes: &n 50 # Number of node for graph generation
     train_num_weeks: 20 # Number of weeks to replicate the determinstic pattern 
     directed: False # Whether the graph should be directed or not
-    num_neg_edge: 10 # Number of sampled negative edges per positive edge; If null, then consider all negatives
     verbose: False # If True, then display seven samples during the week.
     graphs: # The "Deterministic" graph patterns that appear during weekdays. For full list of graph generations by networkx, checkout this https://networkx.org/documentation/stable/reference/generators.html
       - days: [0, 1, 2, 3, 4]
@@ -25,10 +28,13 @@ data:
 
   - name: star-tree
     seed: 2453
+    neg_sampling:
+      strategy: hist_rnd
+      hist_ratio: 0.5
+      num_neg_edge: 10
     num_nodes: &n2 50
     train_num_weeks: 20 
     directed: False
-    num_neg_edge: 10
     verbose: True
     graphs:
       - days: [0, 1, 2, 3, 4]
@@ -43,10 +49,13 @@ data:
 
   - name: cycle-path
     seed: 23423
+    neg_sampling:
+      strategy: hist_rnd
+      hist_ratio: 0.5
+      num_neg_edge: 20
     num_nodes: &n3 50
     train_num_weeks: 20 
     directed: False
-    num_neg_edge: 10
     verbose: True
     graphs:
       - days: [0, 1, 2, 3, 4]

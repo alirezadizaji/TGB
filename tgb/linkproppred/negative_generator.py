@@ -9,8 +9,8 @@ import random
 from torch import Tensor
 import numpy as np
 from torch_geometric.data import TemporalData
-from tgb.utils.utils import save_pkl, load_pkl
-from tgb.utils.info import PROJ_DIR
+from ...tgb.utils.utils import save_pkl, load_pkl
+from ...tgb.utils.info import PROJ_DIR
 import os.path as osp
 import os
 import time
@@ -19,7 +19,7 @@ from tqdm import tqdm
 from torch_geometric.datasets import JODIEDataset
 from torch_geometric.loader import TemporalDataLoader
 
-from tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
+from ...tgb.linkproppred.dataset_pyg import PyGLinkPropPredDataset
 
 
 class NegativeEdgeGenerator(object):
@@ -89,17 +89,7 @@ class NegativeEdgeGenerator(object):
             partial_path: in which directory save the generated negatives
         """
         # file name for saving or loading...
-        filename = (
-            partial_path
-            + "/"
-            + self.dataset_name
-            + "_"
-            + split_mode
-            + "_"
-            + "ns"
-            + ".pkl"
-        )
-
+        filename = os.path.join(partial_path, f"{split_mode}_ns.pkl")
         if self.strategy == "rnd":
             self.generate_negative_samples_rnd(data, split_mode, filename)
         elif self.strategy == "hist_rnd":
@@ -335,6 +325,8 @@ class NegativeEdgeGenerator(object):
                 )
                 # concatenate the two sets: historical and random
                 neg_dst_arr = np.concatenate((neg_hist_dsts, neg_rnd_dsts))
+                if neg_dst_arr.dtype == np.float32:
+                    input("Dorood bar to")
                 evaluation_set[(pos_s, pos_d, pos_t)] = neg_dst_arr
 
             # save the generated evaluation set to disk

@@ -23,6 +23,7 @@ class LastNeighborLoader:
         self.reset_state()
 
     def __call__(self, n_id: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+        n_id = n_id.long()
         neighbors = self.neighbors[n_id]
         nodes = n_id.view(-1, 1).repeat(1, self.size)
         e_id = self.e_id[n_id]
