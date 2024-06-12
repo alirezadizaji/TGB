@@ -2,14 +2,15 @@
 # Configuration for generating determinstic weekly periodic dataset 
 data:
   
-  - name: ER-HK # name of the dataset
+  - name: ER-HK-20w # name of the dataset
     seed: 1234
     neg_sampling:   # Configuration for negative edge sampling for test and validation sets.
-      strategy: hist_rnd # (CURRENTLY) TGB supports "hist_rnd" and "rnd" methods for negative edge sampling.
+      strategy: rnd # (CURRENTLY) TGB supports "hist_rnd" and "rnd" methods for negative edge sampling.
       hist_ratio: 0.5 # The ratio of negative edges to be sampled from historical data, and the rest randomly
-      num_neg_edge: 10 # Number of sampled negative edges per positive edge; To consider all negatives, give a random big number i.e. 1e9
+      num_neg_edge: null # Number of sampled negative edges per positive edge; To consider all negatives, pass null
     num_nodes: &n 50 # Number of node for graph generation
     train_num_weeks: 20 # Number of weeks to replicate the determinstic pattern 
+    permute_nodes: False # If True, then permute node indices randomly
     directed: False # Whether the graph should be directed or not
     verbose: False # If True, then display seven samples during the week.
     graphs: # The "Deterministic" graph patterns that appear during weekdays. For full list of graph generations by networkx, checkout this https://networkx.org/documentation/stable/reference/generators.html
@@ -18,7 +19,6 @@ data:
         params:
           n: *n
           p: 0.06
-          directed: False
       - days: [5, 6]
         pattern: powerlaw_cluster_graph
         params:
@@ -26,14 +26,15 @@ data:
           m: 4
           p: 0.05
 
-  - name: star-tree
+  - name: star-tree-20w
     seed: 2453
     neg_sampling:
-      strategy: hist_rnd
+      strategy: rnd
       hist_ratio: 0.5
-      num_neg_edge: 10
+      num_neg_edge: null
     num_nodes: &n2 50
-    train_num_weeks: 20 
+    train_num_weeks: 20
+    permute_nodes: False
     directed: False
     verbose: True
     graphs:
@@ -47,14 +48,15 @@ data:
         params:
           n: *n2
 
-  - name: cycle-path
+  - name: cycle-path-20w
     seed: 23423
     neg_sampling:
-      strategy: hist_rnd
+      strategy: rnd
       hist_ratio: 0.5
-      num_neg_edge: 20
+      num_neg_edge: null
     num_nodes: &n3 50
-    train_num_weeks: 20 
+    train_num_weeks: 20
+    permute_nodes: True 
     directed: False
     verbose: True
     graphs:
@@ -67,4 +69,138 @@ data:
         params:
           n: *n3  
 
-    
+####### 100 Weeks ########
+  - name: ER-HK-100w
+    seed: 1234
+    neg_sampling:
+      strategy: rnd 
+      hist_ratio: 0.5
+      num_neg_edge: null
+    num_nodes: &n4 50
+    train_num_weeks: 100
+    permute_nodes: False
+    directed: False
+    verbose: False
+    graphs:
+      - days: [0, 1, 2, 3, 4]
+        pattern: erdos_renyi_graph
+        params:
+          n: *n4
+          p: 0.06
+      - days: [5, 6]
+        pattern: powerlaw_cluster_graph
+        params:
+          n: *n4
+          m: 4
+          p: 0.05
+
+  - name: star-tree-100w
+    seed: 2453
+    neg_sampling:
+      strategy: rnd
+      hist_ratio: 0.5
+      num_neg_edge: null
+    num_nodes: &n5 50
+    train_num_weeks: 100 
+    permute_nodes: False
+    directed: False
+    verbose: True
+    graphs:
+      - days: [0, 1, 2, 3, 4]
+        pattern: full_rary_tree
+        params:
+          n: *n5
+          r: 2
+      - days: [5, 6]
+        pattern: star_graph
+        params:
+          n: *n5
+
+  - name: cycle-path-100w
+    seed: 23423
+    neg_sampling:
+      strategy: rnd
+      hist_ratio: 0.5
+      num_neg_edge: null
+    num_nodes: &n6 50
+    train_num_weeks: 100 
+    permute_nodes: True
+    directed: False
+    verbose: True
+    graphs:
+      - days: [0, 1, 2, 3, 4]
+        pattern: path_graph
+        params:
+          n: *n6
+      - days: [5, 6]
+        pattern: cycle_graph
+        params:
+          n: *n6
+
+####### 2 Weeks ########
+  - name: ER-HK-2w
+    seed: 1234
+    neg_sampling:
+      strategy: rnd 
+      hist_ratio: 0.5
+      num_neg_edge: null
+    num_nodes: &n7 50
+    train_num_weeks: 2
+    permute_nodes: False
+    directed: False
+    verbose: False
+    graphs:
+      - days: [0, 1, 2, 3, 4]
+        pattern: erdos_renyi_graph
+        params:
+          n: *n7
+          p: 0.06
+      - days: [5, 6]
+        pattern: powerlaw_cluster_graph
+        params:
+          n: *n7
+          m: 4
+          p: 0.05
+
+  - name: star-tree-2w
+    seed: 2453
+    neg_sampling:
+      strategy: rnd
+      hist_ratio: 0.5
+      num_neg_edge: null
+    num_nodes: &n8 50
+    train_num_weeks: 2 
+    permute_nodes: False
+    directed: False
+    verbose: True
+    graphs:
+      - days: [0, 1, 2, 3, 4]
+        pattern: full_rary_tree
+        params:
+          n: *n8
+          r: 2
+      - days: [5, 6]
+        pattern: star_graph
+        params:
+          n: *n8
+
+  - name: cycle-path-2w
+    seed: 23423
+    neg_sampling:
+      strategy: rnd
+      hist_ratio: 0.5
+      num_neg_edge: null
+    num_nodes: &n9 50
+    train_num_weeks: 2
+    permute_nodes: True 
+    directed: False
+    verbose: True
+    graphs:
+      - days: [0, 1, 2, 3, 4]
+        pattern: path_graph
+        params:
+          n: *n9
+      - days: [5, 6]
+        pattern: cycle_graph
+        params:
+          n: *n9

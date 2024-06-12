@@ -28,6 +28,16 @@ def _get_args():
     args = parser.parse_args()
     return args
 
+def to_adj(A: np.ndarray, num_nodes: int) -> np.ndarray:
+    Adj = np.zeros((num_nodes, num_nodes))
+    Adj[A[:, 0], A[:, 1]] = 1
+    return Adj
+
+def to_sparse(Adj: np.ndarray) -> np.ndarray:
+    r, c = np.nonzero(Adj)
+    A = np.stack([r, c], axis=1)
+    return A
+
 def main():
     """ This function generates synthetic temporal data which models (weekly) periodicity, using determinstic patterns. 
     The negative edge sampling method is adopted from TGB framework by Huang et al (2023).
@@ -47,6 +57,8 @@ def main():
             verbose = data["verbose"]
             neg_sampling = data["neg_sampling"]
             graphs = data["graphs"]
+            directed = data["directed"]
+            permute = data["permute_nodes"]
         
             fdir = os.path.join(args.save_dir, name)
             if os.path.exists(fdir):
@@ -64,16 +76,40 @@ def main():
         day_sample = dict()
         for g in graphs:
 
-            sample = None
+            A: np.ndarray = None
             for d in g["days"]:
                 if d in day_sample:
                     raise Exception(f"Invalid configuration. Day {d} has more than one deterministic graph patterns.")
                 
-                if sample is None:
-                    func = getattr(nx, g["pattern"])
-                    sample = func(**g["params"])
+                if A is not None:
+                    day_sample[d] = A
+                    continue
                 
-                day_sample[d] = sample
+                func = getattr(nx, g["pattern"])
+                sample: nx.Graph = func(**g["params"])
+            
+                A = np.array(sample.edges)
+
+                # Make sure undirected graphs have bilateral edges
+                if directed == False:
+                    A = np.concatenate([A, A[:, [1, 0]]], axis=0)
+                    A = np.unique(A, axis=0)
+
+                # Permute nodes randomly
+                if permute:
+                    I = np.eye(num_nodes)
+                    P = I
+                    Adj = to_adj(A, num_nodes=num_nodes)
+                    while np.allclose(P, I):
+                        ind = np.random.choice(np.arange(num_nodes), size=num_nodes, replace=False)
+                        P = I[ind]
+                    
+                    # permutation
+                    Adj = P @ Adj @ P.T
+
+                    A = to_sparse(Adj)
+                
+                day_sample[d] = A
         
         src = np.empty(0)
         dst = np.empty_like(src)
@@ -82,19 +118,22 @@ def main():
 
         # Generate for only one week
         for day in range(7):
-            G = day_sample[day]
-
+            A: np.ndarray = day_sample[day]
             if verbose:
-                print("Visualizing...")
+                print("\tVisualizing...")
+                
+                # Create the graph
+                G = nx.Graph()
+                G.add_nodes_from(np.arange(num_nodes))
+                G.add_edges_from(A)
+
                 pos = nx.kamada_kawai_layout(G)
-                nx.draw_networkx_edges(G, pos)
-                nx.draw_networkx_nodes(G, pos, node_size=10)
+                nx.draw_networkx(G, pos, node_size=30, with_labels=True, node_color="yellow")
                 plt.title(f"Name {name} Day {day}")
                 plt.show(block=False)
-                plt.pause(1)
+                plt.pause(3)
                 plt.close()
 
-            A = np.array(G.edges)
             num_edges = A.shape[0]
 
             src = np.concatenate([src, A[:, 0]])
@@ -120,6 +159,7 @@ def main():
         val_mask = np.roll(test_mask, -one_week_num_samples)
         train_mask = (1 - val_mask - test_mask) == 1
 
+        print(f"\t Data generated. src shape: {src.shape}, edge_feat shape: {edge_feat.shape}", flush=True)
         data = TemporalData(
             src=torch.tensor(src),
             dst=torch.tensor(dst),

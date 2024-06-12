@@ -3,6 +3,7 @@ Sample and Generate negative edges that are going to be used for evaluation of a
 Negative samples are generated and saved to files ONLY once; 
     other times, they should be loaded from file with instances of the `negative_sampler.py`.
 """
+from typing import Optional
 
 import torch
 import random
@@ -28,7 +29,7 @@ class NegativeEdgeGenerator(object):
         dataset_name: str,
         first_dst_id: int,
         last_dst_id: int,
-        num_neg_e: int = 100,  # number of negative edges sampled per positive edges --> make it constant => 1000
+        num_neg_e: Optional[int] = 100,  # number of negative edges sampled per positive edges --> make it constant => 1000
         strategy: str = "rnd",
         rnd_seed: int = 123,
         hist_ratio: float = 0.5,
@@ -47,7 +48,7 @@ class NegativeEdgeGenerator(object):
             dataset_name: name of the dataset
             first_dst_id: identity of the first destination node
             last_dst_id: indentity of the last destination node
-            num_neg_e: number of negative edges being generated per each positive edge
+            num_neg_e: number of negative edges being generated per each positive edge. If pass `None`, then pick negative samples as much as possible.
             strategy: how to generate negative edges; can be 'rnd' or 'hist_rnd'
             rnd_seed: random seed for consistency
             hist_ratio: if the startegy is 'hist_rnd', how much of the negatives are historical
@@ -55,6 +56,10 @@ class NegativeEdgeGenerator(object):
         
         Returns:
             None
+
+        NOTE:
+            Passing `None` to `num_neg_e` only works for `rnd` strategy. This is because `hist_rnd` strategy uses both 'random' and 'historical data', 
+            and these two could have different numbers of negative pairs.
         """
         self.rnd_seed = rnd_seed
         np.random.seed(self.rnd_seed)
@@ -157,7 +162,8 @@ class NegativeEdgeGenerator(object):
                 '''
                 when num_neg_e is larger than all possible destinations simple return all possible destinations
                 '''
-                if (self.num_neg_e > len(filtered_all_dst)):
+
+                if (self.num_neg_e is None or self.num_neg_e > len(filtered_all_dst)):
                     neg_d_arr = filtered_all_dst
                 else:
                     neg_d_arr = np.random.choice(
@@ -226,6 +232,8 @@ class NegativeEdgeGenerator(object):
         Returns:
             None
         """
+
+        assert self.num_neg_e
         print(
             f"INFO: Negative Sampling Strategy: {self.strategy}, Data Split: {split_mode}"
         )
@@ -325,8 +333,6 @@ class NegativeEdgeGenerator(object):
                 )
                 # concatenate the two sets: historical and random
                 neg_dst_arr = np.concatenate((neg_hist_dsts, neg_rnd_dsts))
-                if neg_dst_arr.dtype == np.float32:
-                    input("Dorood bar to")
                 evaluation_set[(pos_s, pos_d, pos_t)] = neg_dst_arr
 
             # save the generated evaluation set to disk
