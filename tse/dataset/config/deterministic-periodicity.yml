@@ -15,11 +15,13 @@ data:
     verbose: False # If True, then display seven samples during the week.
     graphs: # The "Deterministic" graph patterns that appear during weekdays. For full list of graph generations by networkx, checkout this https://networkx.org/documentation/stable/reference/generators.html
       - days: [0, 1, 2, 3, 4]
+        source: networkx
         pattern: erdos_renyi_graph
         params:
           n: *n
           p: 0.06
       - days: [5, 6]
+        source: networkx
         pattern: powerlaw_cluster_graph
         params:
           n: *n
@@ -39,11 +41,13 @@ data:
     verbose: True
     graphs:
       - days: [0, 1, 2, 3, 4]
+        source: networkx
         pattern: full_rary_tree
         params:
           n: *n2
           r: 2
       - days: [5, 6]
+        source: networkx
         pattern: star_graph
         params:
           n: *n2
@@ -61,13 +65,39 @@ data:
     verbose: True
     graphs:
       - days: [0, 1, 2, 3, 4]
+        source: networkx
         pattern: path_graph
         params:
           n: *n3
       - days: [5, 6]
+        source: networkx
         pattern: cycle_graph
         params:
-          n: *n3  
+          n: *n3 
+
+  - name: er-motif-20w
+    seed: 5765
+    neg_sampling:
+      strategy: rnd
+      num_neg_edge: null
+    num_nodes: &n10 50
+    train_num_weeks: 2
+    permute_nodes: False 
+    directed: False
+    verbose: True
+    graphs:
+      - days: [0, 1, 2, 3, 4]
+        source: TGB.tse.dataset.pattern
+        pattern: er_motif_weekly
+        params:
+          n: *n10
+          p: 0.01
+          motif: complete_graph
+          motif_param:
+            n: 5
+      - days: [5, 6]
+        source: TGB.tse.dataset.pattern
+        pattern: er_motif_weekly
 
 ####### 100 Weeks ########
   - name: ER-HK-100w
@@ -83,11 +113,13 @@ data:
     verbose: False
     graphs:
       - days: [0, 1, 2, 3, 4]
+        source: networkx
         pattern: erdos_renyi_graph
         params:
           n: *n4
           p: 0.06
       - days: [5, 6]
+        source: networkx
         pattern: powerlaw_cluster_graph
         params:
           n: *n4
@@ -107,11 +139,13 @@ data:
     verbose: True
     graphs:
       - days: [0, 1, 2, 3, 4]
+        source: networkx
         pattern: full_rary_tree
         params:
           n: *n5
           r: 2
       - days: [5, 6]
+        source: networkx
         pattern: star_graph
         params:
           n: *n5
@@ -129,13 +163,39 @@ data:
     verbose: True
     graphs:
       - days: [0, 1, 2, 3, 4]
+        source: networkx
         pattern: path_graph
         params:
           n: *n6
       - days: [5, 6]
+        source: networkx
         pattern: cycle_graph
         params:
           n: *n6
+  
+  - name: er-motif-100w
+    seed: 5765
+    neg_sampling:
+      strategy: rnd
+      num_neg_edge: null
+    num_nodes: &n11 50
+    train_num_weeks: 100
+    permute_nodes: False 
+    directed: False
+    verbose: True
+    graphs:
+      - days: [0, 1, 2, 3, 4]
+        source: TGB.tse.dataset.pattern
+        pattern: er_motif_weekly
+        params:
+          n: *n11
+          p: 0.01
+          motif: complete_graph
+          motif_param:
+            n: 5
+      - days: [5, 6]
+        source: TGB.tse.dataset.pattern
+        pattern: er_motif_weekly
 
 ####### 2 Weeks ########
   - name: ER-HK-2w
@@ -151,11 +211,13 @@ data:
     verbose: False
     graphs:
       - days: [0, 1, 2, 3, 4]
+        source: networkx
         pattern: erdos_renyi_graph
         params:
           n: *n7
           p: 0.06
       - days: [5, 6]
+        source: networkx
         pattern: powerlaw_cluster_graph
         params:
           n: *n7
@@ -175,11 +237,13 @@ data:
     verbose: True
     graphs:
       - days: [0, 1, 2, 3, 4]
+        source: networkx
         pattern: full_rary_tree
         params:
           n: *n8
           r: 2
       - days: [5, 6]
+        source: networkx
         pattern: star_graph
         params:
           n: *n8
@@ -197,10 +261,36 @@ data:
     verbose: True
     graphs:
       - days: [0, 1, 2, 3, 4]
+        source: networkx
         pattern: path_graph
         params:
           n: *n9
       - days: [5, 6]
+        source: networkx
         pattern: cycle_graph
         params:
           n: *n9
+  
+  - name: er-motif-2w
+    seed: 5765
+    neg_sampling:
+      strategy: rnd
+      num_neg_edge: null
+    num_nodes: &n12 50
+    train_num_weeks: 2
+    permute_nodes: False 
+    directed: False
+    verbose: True
+    graphs:
+      - days: [0, 1, 2, 3, 4]
+        source: TGB.tse.dataset.pattern
+        pattern: er_motif_weekly
+        params:
+          n: *n12
+          p: 0.01
+          motif: complete_graph
+          motif_param:
+            n: 5
+      - days: [5, 6]
+        source: TGB.tse.dataset.pattern
+        pattern: er_motif_weekly

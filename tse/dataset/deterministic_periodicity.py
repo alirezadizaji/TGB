@@ -84,8 +84,12 @@ def main():
                 if A is not None:
                     day_sample[d] = A
                     continue
-                
-                func = getattr(nx, g["pattern"])
+
+                ### (DEVELOPER NOTE): FOLLOWING CODES ARE EXECUTED BUT YOU MIGHT SEE THEM HIGHLIGHTED WITHIN YOUR EDITOR ###
+                module = import_module(g["source"])
+                func = getattr(module, g["pattern"])
+                if "params" not in g:
+                    g["params"] = dict()
                 sample: nx.Graph = func(**g["params"])
             
                 A = np.array(sample.edges)
@@ -120,7 +124,7 @@ def main():
         for day in range(7):
             A: np.ndarray = day_sample[day]
             if verbose:
-                print("\tVisualizing...")
+                print(f"\tVisualizing day {day} ...")
                 
                 # Create the graph
                 G = nx.Graph()
