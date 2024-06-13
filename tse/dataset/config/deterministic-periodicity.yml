@@ -32,7 +32,6 @@ data:
     seed: 2453
     neg_sampling:
       strategy: rnd
-      hist_ratio: 0.5
       num_neg_edge: null
     num_nodes: &n2 50
     train_num_weeks: 20
@@ -56,7 +55,6 @@ data:
     seed: 23423
     neg_sampling:
       strategy: rnd
-      hist_ratio: 0.5
       num_neg_edge: null
     num_nodes: &n3 50
     train_num_weeks: 20
@@ -75,7 +73,7 @@ data:
         params:
           n: *n3 
 
-  - name: er-motif-20w
+  - name: er-clique-20w
     seed: 5765
     neg_sampling:
       strategy: rnd
@@ -104,7 +102,6 @@ data:
     seed: 1234
     neg_sampling:
       strategy: rnd 
-      hist_ratio: 0.5
       num_neg_edge: null
     num_nodes: &n4 50
     train_num_weeks: 100
@@ -130,7 +127,6 @@ data:
     seed: 2453
     neg_sampling:
       strategy: rnd
-      hist_ratio: 0.5
       num_neg_edge: null
     num_nodes: &n5 50
     train_num_weeks: 100 
@@ -154,7 +150,6 @@ data:
     seed: 23423
     neg_sampling:
       strategy: rnd
-      hist_ratio: 0.5
       num_neg_edge: null
     num_nodes: &n6 50
     train_num_weeks: 100 
@@ -173,7 +168,7 @@ data:
         params:
           n: *n6
   
-  - name: er-motif-100w
+  - name: er-clique-100w
     seed: 5765
     neg_sampling:
       strategy: rnd
@@ -202,7 +197,6 @@ data:
     seed: 1234
     neg_sampling:
       strategy: rnd 
-      hist_ratio: 0.5
       num_neg_edge: null
     num_nodes: &n7 50
     train_num_weeks: 2
@@ -228,7 +222,6 @@ data:
     seed: 2453
     neg_sampling:
       strategy: rnd
-      hist_ratio: 0.5
       num_neg_edge: null
     num_nodes: &n8 50
     train_num_weeks: 2 
@@ -252,7 +245,6 @@ data:
     seed: 23423
     neg_sampling:
       strategy: rnd
-      hist_ratio: 0.5
       num_neg_edge: null
     num_nodes: &n9 50
     train_num_weeks: 2
@@ -271,7 +263,7 @@ data:
         params:
           n: *n9
   
-  - name: er-motif-2w
+  - name: er-clique-2w
     seed: 5765
     neg_sampling:
       strategy: rnd

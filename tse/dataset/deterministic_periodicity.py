@@ -18,8 +18,6 @@ from torch_geometric.data import TemporalData
 
 from ...tgb.linkproppred.negative_generator import NegativeEdgeGenerator
 
-from .negative_sampler import gen_neg_dst
-
 def _get_args():
     parser = argparse.ArgumentParser('*** TGB ***')
     parser.add_argument('-c', '--conf-dir', type=str, help='Configuration directory for graph generation')
@@ -121,6 +119,7 @@ def main():
         edge_feat = np.empty_like(src)
 
         # Generate for only one week
+        pos = None
         for day in range(7):
             A: np.ndarray = day_sample[day]
             if verbose:
@@ -130,8 +129,8 @@ def main():
                 G = nx.Graph()
                 G.add_nodes_from(np.arange(num_nodes))
                 G.add_edges_from(A)
-
-                pos = nx.kamada_kawai_layout(G)
+                if pos is None:
+                    pos = nx.kamada_kawai_layout(G)
                 nx.draw_networkx(G, pos, node_size=30, with_labels=True, node_color="yellow")
                 plt.title(f"Name {name} Day {day}")
                 plt.show(block=False)

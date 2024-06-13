@@ -10,16 +10,16 @@ def _erdos_renyi_motif(n: int, p: float, motif: str, motif_param: dict) -> nx.Gr
     G2:nx.Graph = func(**motif_param)
     motif_num_nodes = G2.number_of_nodes()
 
-    # Pick nodes with smallest degrees to attach motif
-    degrees = G.degree
-    n1_id1 = np.sort(degrees)[:motif_num_nodes]
-    
+    # Pick nodes with smallest degrees to attach motif with
+    degrees = np.array(G.degree)[:, 1]
+    n1_id1 = np.argsort(degrees)[:motif_num_nodes]
+
     # To attach G2 to G, reindex nodes within G2
     A2 = np.array(G2.edges)
     shape = A2.shape
     L = A2.flatten()
     L = n1_id1[L]
-    A2 = A2.reshape(shape)
+    A2 = L.reshape(shape)
 
     G2 = G.copy()
     # Attach motif
