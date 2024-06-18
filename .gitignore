@@ -153,3 +153,5 @@ dmypy.json
 
 
 .DS_Store
+
+*.png

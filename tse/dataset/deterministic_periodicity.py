@@ -221,13 +221,12 @@ def main():
             f"INFO: End of negative samples generation. Elapsed Time (s): {time.time() - start_time: .4f}"
         )
 
-        node_feat = np.ones((num_nodes, 1)).astype(np.float32)
         np.savez_compressed(os.path.join(fdir, "data.npz"), 
             src=src, 
             dst=dst, 
             t=t,
             edge_feat=edge_feat,
-            node_feat=node_feat,
+            num_nodes=num_nodes,
             train_mask=train_mask,
             val_mask=val_mask,
             test_mask=test_mask)

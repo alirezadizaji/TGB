@@ -3,6 +3,8 @@ Dynamic Link Prediction with a EvolveGCNO model with Early Stopping
 """
 
 import argparse
+import matplotlib.pyplot as plt
+import networkx as nx
 import timeit
 import os
 import os.path as osp
@@ -15,7 +17,7 @@ import torch
 from ....tgb.linkproppred.negative_sampler import NegativeEdgeSampler
 from ....tgb.utils.utils import set_random_seed, save_results
 from ....tgb.linkproppred.evaluate import Evaluator
-from ....tse.models import MultiLayerEGCNO, EvolveGCNParams, LinkPredictor
+from ....tse import MultiLayerEGCNO, EvolveGCNParams, LinkPredictor, NodeFeatType, NodeFeatGenerator
 from ....modules.early_stopping import  EarlyStopMonitor
 
 
@@ -29,6 +31,7 @@ def get_args():
     parser.add_argument('--lr', type=float, help='Learning rate', default=1e-4)
     parser.add_argument('--k_value', type=int, help='k_value for computing ranking metrics', default=10)
     parser.add_argument('--num_epoch', type=int, help='Number of epochs', default=50)
+    parser.add_argument('--node-feat', choices=NodeFeatType.list(), help='Type of node feature generation', default=NodeFeatType.CONSTANT)
     parser.add_argument('--seed', type=int, help='Random seed', default=1)
     parser.add_argument('--num_units', type=int, help='Number of EvolveGCN units', default=1)
     parser.add_argument('--in_channels', type=int, help='input channel dimension of EvolveGCNO', default=100)
@@ -48,6 +51,37 @@ def get_args():
         
     return args, sys.argv
 
+
+def visualizer(split_mode: str, save_dir: str):
+    def _visualize(pred_adj: torch.Tensor, target_adj: torch.Tensor, filename: str):
+        pred_adj = (pred_adj >= 0.5).detach().cpu().numpy()
+        pred_src, pred_dst = np.nonzero(pred_adj)
+
+        target_adj = target_adj.detach().cpu().numpy()
+        target_src, target_dst = np.nonzero(target_adj)
+
+        G1 = nx.Graph()
+        G1.add_nodes_from(list(range(num_nodes)))
+        G1.add_edges_from(list(zip(target_src, target_dst)))
+        pos = nx.kamada_kawai_layout(G1,)
+        _, axes = plt.subplots(1, 2, figsize=(20, 10))
+        nx.draw_networkx(G1, pos, node_size=200, node_color='lightblue', ax=axes[0])
+        axes[0].set_title(f"Target", fontsize=30)
+        G2 = nx.Graph()
+        G2.add_edges_from(list(zip(pred_src, pred_dst)))
+        nx.draw_networkx(G2, pos, node_size=200, node_color='lightblue', ax=axes[1])
+        axes[1].set_title(f"Prediction", fontsize=30)
+        
+        d = os.path.join(save_dir, split_mode, "vis")
+        os.makedirs(d, exist_ok=True)
+        d = os.path.join(d, filename)
+        plt.suptitle(filename, fontsize=40)
+        plt.savefig(d)
+        plt.close()
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    return _visualize
 
 def train():
     r"""
@@ -71,14 +105,13 @@ def train():
         out_2d.fill_(torch.nan)
         
         prev_edge_index = None
-        # At time step 0, the input graph is empty
+        # At time step 0, the input graph is empty of edges
         if cur_t == 0:
-            prev_edge_index = torch.empty((2, 0))
-
+            prev_src, prev_dst = torch.nonzero(torch.zeros_like(trainA), as_tuple=True)
         else:
             prev_src, prev_dst = torch.nonzero(train_adj[cur_t - 1], as_tuple=True)
-            prev_edge_index = torch.stack([prev_src, prev_dst], dim=0)
         
+        prev_edge_index = torch.stack([prev_src, prev_dst], dim=0)
         
         # Separate positive and negative pairs
         cur_src, cur_dst = torch.nonzero(trainA, as_tuple=True)
@@ -121,6 +154,8 @@ def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tens
     model['gnn'].eval()
     model['link_pred'].eval()
 
+    vis = visualizer(split_mode, save_dir=os.path.join(results_path, MODEL_NAME, DATA))
+
     perf_list = []
 
     out_2d = out_2d.detach()
@@ -129,10 +164,9 @@ def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tens
         cur_t = i + start_time
 
         prev_edge_index = None
-        # At first step of validation and the whole steps of test evaluation, the model output is used as edge index input for next time step
-        if split_mode == 'test' or (split_mode == 'val' and i == 0):
+        # At first step of evaluation, pass the last time recurrent model output as the first adjacency input
+        if i == 0:
             prev_adj = (out_2d >= 0.5).long()
-
         else:
             prev_adj = val_adj[i]
         prev_src, prev_dst = torch.nonzero(prev_adj, as_tuple=True)
@@ -153,12 +187,17 @@ def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tens
         # Predicted edge index
         pos_pred = model['link_pred'](z[pos_src], z[pos_dst])
         neg_pred = model['link_pred'](z[neg_src], z[neg_dst])
+
         out_2d.fill_(torch.nan)
         out_2d[pos_src, pos_dst] = pos_pred.squeeze(-1).detach()
         out_2d[neg_src, neg_dst] = neg_pred.squeeze(-1).detach()
 
         # Valid number assertion
         assert torch.all(out_2d != torch.nan)
+
+        # Visualize outputs
+        if split_mode == "test":
+            vis(out_2d, evalA, str(i))
 
         # MRR evaluation
         for idx, neg_batch in enumerate(neg_batch_list):
@@ -226,15 +265,19 @@ src = torch.tensor(data_np["src"])
 dst = torch.tensor(data_np["dst"])
 t = torch.tensor(data_np["t"])
 edge_feat = torch.tensor(data_np["edge_feat"])
-node_feat = torch.tensor(data_np["node_feat"])
+if "num_nodes" in data_np:
+    num_nodes = data_np["num_nodes"]
+else:
+    num_nodes = data_np["node_feat"].shape[0]
 train_mask = list(data_np["train_mask"])
 val_mask = list(data_np["val_mask"])
 test_mask = list(data_np["test_mask"])
 
 max_t = t.max()
 
+############### NODE FEATURE GENERATION #################
+node_feat = NodeFeatGenerator(args.node_feat, EMB_DIM)(num_nodes)
 node_feat = node_feat.to(device)
-num_nodes = node_feat.size(0)
 adj = torch.zeros((max_t + 1, num_nodes, num_nodes))
 adj[t, src, dst] = 1
 
