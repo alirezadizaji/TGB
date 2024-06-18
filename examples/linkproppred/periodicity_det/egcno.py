@@ -11,15 +11,11 @@ import sys
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
-from torch.nn import functional as F
 
 from ....tgb.linkproppred.negative_sampler import NegativeEdgeSampler
-from ....tse.dataset.dataset import SnapshotDataset
 from ....tgb.utils.utils import set_random_seed, save_results
 from ....tgb.linkproppred.evaluate import Evaluator
-from ....tse.models import MultiLayerEGCNO, EvolveGCNParams
-from ....modules.decoder import LinkPredictor
+from ....tse.models import MultiLayerEGCNO, EvolveGCNParams, LinkPredictor
 from ....modules.early_stopping import  EarlyStopMonitor
 
 
@@ -29,17 +25,18 @@ from ....modules.early_stopping import  EarlyStopMonitor
 
 def get_args():
     parser = argparse.ArgumentParser('*** TGB ***')
+    parser.add_argument('-d', '--data', type=str, help='Dataset name')
     parser.add_argument('--lr', type=float, help='Learning rate', default=1e-4)
-    # parser.add_argument('--bs', type=int, help='Batch size', default=200)
     parser.add_argument('--k_value', type=int, help='k_value for computing ranking metrics', default=10)
     parser.add_argument('--num_epoch', type=int, help='Number of epochs', default=50)
     parser.add_argument('--seed', type=int, help='Random seed', default=1)
     parser.add_argument('--num_units', type=int, help='Number of EvolveGCN units', default=1)
-    parser.add_argument('--in_channels', type=int, help='input channel dimension of EvolveGCNO')
+    parser.add_argument('--in_channels', type=int, help='input channel dimension of EvolveGCNO', default=100)
     parser.add_argument('--improved', type=bool, help='If True, then identity is added to adjacency matrix', default=False)
     parser.add_argument('--cached', type=bool, help='If True, then EvolveGCN caches the normalized adjacency matrix and uses it in next steps', default=False)
     parser.add_argument('--normalize', type=bool, help='If True, then EvolveGCN normalizes the adjacency matrix', default=True)
     parser.add_argument('--patience', type=float, help='Early stopper patience', default=5)
+    parser.add_argument('--tolerance', type=float, help='Early stopper tolerance', default=1e-6)
     parser.add_argument('--num_run', type=int, help='Number of iteration runs', default=1)
     parser.add_argument('-l', '--data-loc', type=str, help='The location where data is stored.')
 
@@ -54,7 +51,7 @@ def get_args():
 
 def train():
     r"""
-    Training procedure for TGN model
+    Training procedure for EvolveGCN model
     This function uses some objects that are globally defined in the current scrips 
 
     Parameters:
@@ -63,36 +60,64 @@ def train():
         None
             
     """
+    out_2d = torch.zeros((num_nodes, num_nodes), requires_grad=False)
 
     model['gnn'].train()
     model['link_pred'].train()
     total_loss = 0
-    for i in range(len(train_set)):
+    for cur_t, trainA in enumerate(train_adj):
+
+        # This variable stores the model output. All elements should have a valid number at the end
+        out_2d.fill_(torch.nan)
         
-        start_edge_index, end_edge_index, curr_t = train_set[i]
-        start_edge_index = start_edge_index.to(device)
-        end_edge_index = end_edge_index.to(device)
+        prev_edge_index = None
+        # At time step 0, the input graph is empty
+        if cur_t == 0:
+            prev_edge_index = torch.empty((2, 0))
+
+        else:
+            prev_src, prev_dst = torch.nonzero(train_adj[cur_t - 1], as_tuple=True)
+            prev_edge_index = torch.stack([prev_src, prev_dst], dim=0)
+        
+        
+        # Separate positive and negative pairs
+        cur_src, cur_dst = torch.nonzero(trainA, as_tuple=True)
+        neg_src, neg_dst = torch.nonzero(trainA == 0, as_tuple=True)
+
+        prev_edge_index = prev_edge_index.to(device)
 
         optimizer.zero_grad()
 
         z = model['gnn'](
-            start_edge_index,
-            node_feat)
-        
-        out: torch.Tensor = model['link_pred'](z)             # N, 1
-        out_2d = out * out.T                                  # N, N
+            node_feat,
+            prev_edge_index.long())
 
-        loss = criterion(out_2d, end_edge_index)
+        pos_pred: torch.Tensor = model['link_pred'](z[cur_src], z[cur_dst])
+        neg_pred: torch.Tensor = model['link_pred'](z[neg_src], z[neg_dst])
+
+        # Sigmoid assertion
+        assert torch.all(pos_pred <= 1) and torch.all(pos_pred >= 0), "Sigmoid assertion failed. make sure `sigmoid` is applied at model output."
+
+        # Loss calculation
+        loss = criterion(pos_pred, torch.ones_like(pos_pred))
+        loss += criterion(neg_pred, torch.zeros_like(neg_pred))
 
         loss.backward()
         optimizer.step()
-        total_loss += float(loss)
+        total_loss += float(loss.detach())
 
-    return total_loss / len(train_set), out_2d
+        # Predicted edge index
+        out_2d[cur_src, cur_dst] = pos_pred.squeeze(-1).detach()
+        out_2d[neg_src, neg_dst] = neg_pred.squeeze(-1).detach()
+
+        # Valid number assertion
+        assert torch.all(out_2d != torch.nan)
+
+    return total_loss / train_adj.size(0), out_2d
 
 
 @torch.no_grad()
-def test(dataset: SnapshotDataset, neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tensor):
+def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tensor, start_time: int):
     model['gnn'].eval()
     model['link_pred'].eval()
 
@@ -100,29 +125,42 @@ def test(dataset: SnapshotDataset, neg_sampler: torch.Tensor, split_mode: torch.
 
     out_2d = out_2d.detach()
     
-    for i in range(len(dataset)):
-        adjacency = (out_2d >= 0.5)
-        s, d = torch.nonzero(adjacency)
-        edge_index = torch.stack([s, d], dim=1)
-        _, _, curr_t = train_set[i]
-        # start_edge_index, end_edge_index, curr_t = train_data[i]
-        # start_edge_index = start_edge_index.to(device)
-        # end_edge_index = end_edge_index.to(device)
+    for i, evalA in enumerate(val_adj):
+        cur_t = i + start_time
 
-        mask = (t == curr_t)
-        pos_src = src[mask]
-        pos_dst = dst[mask]
-        pos_t = t[mask]
+        prev_edge_index = None
+        # At first step of validation and the whole steps of test evaluation, the model output is used as edge index input for next time step
+        if split_mode == 'test' or (split_mode == 'val' and i == 0):
+            prev_adj = (out_2d >= 0.5).long()
 
+        else:
+            prev_adj = val_adj[i]
+        prev_src, prev_dst = torch.nonzero(prev_adj, as_tuple=True)
+        prev_edge_index = torch.stack([prev_src, prev_dst], dim=0)
+        
+        # Separate positive and negative pairs
+        pos_src, pos_dst = torch.nonzero(evalA, as_tuple=True)
+        neg_src, neg_dst = torch.nonzero(evalA == 0, as_tuple=True)
+
+        pos_t = t[t == cur_t]
         neg_batch_list = neg_sampler.query_batch(pos_src, pos_dst, pos_t, split_mode=split_mode)
 
-
+        prev_edge_index = prev_edge_index.to(device)
         z = model['gnn'](
-            edge_index,
-            node_feat)
-        out = model['link_pred'](z)
-        out_2d = out * out.T
+            node_feat,
+            prev_edge_index)
 
+        # Predicted edge index
+        pos_pred = model['link_pred'](z[pos_src], z[pos_dst])
+        neg_pred = model['link_pred'](z[neg_src], z[neg_dst])
+        out_2d.fill_(torch.nan)
+        out_2d[pos_src, pos_dst] = pos_pred.squeeze(-1).detach()
+        out_2d[neg_src, neg_dst] = neg_pred.squeeze(-1).detach()
+
+        # Valid number assertion
+        assert torch.all(out_2d != torch.nan)
+
+        # MRR evaluation
         for idx, neg_batch in enumerate(neg_batch_list):
             src = torch.full((1 + len(neg_batch),), pos_src[idx], device=device)
             dst = torch.tensor(
@@ -133,18 +171,19 @@ def test(dataset: SnapshotDataset, neg_sampler: torch.Tensor, split_mode: torch.
                 device=device,
             ).long()
 
+            pred = model['link_pred'](z[src], z[dst])
 
             # compute MRR
             input_dict = {
-                "y_pred_pos": np.array([out_2d[src, dst[0]].squeeze(dim=-1).cpu()]),
-                "y_pred_neg": np.array(out_2d[src, dst[1:]].squeeze(dim=-1).cpu()),
+                "y_pred_pos": np.array([pred[0].squeeze(dim=-1).cpu()]),
+                "y_pred_neg": np.array(pred[1:].squeeze(dim=-1).cpu()),
                 "eval_metric": [metric],
             }
             perf_list.append(evaluator.eval(input_dict)[metric])
 
     perf_metrics = float(torch.tensor(perf_list).mean())
 
-    return perf_metrics
+    return perf_metrics, out_2d
 
 # ==========
 # ==========
@@ -159,7 +198,7 @@ args, _ = get_args()
 
 print("INFO: Arguments:", args)
 
-DATA = 'tgbl-comment'
+DATA = args.data
 LR = args.lr
 K_VALUE = args.k_value  
 NUM_EPOCH = args.num_epoch
@@ -194,8 +233,9 @@ test_mask = list(data_np["test_mask"])
 
 max_t = t.max()
 
+node_feat = node_feat.to(device)
 num_nodes = node_feat.size(0)
-adj = torch.zero((max_t, num_nodes, num_nodes))
+adj = torch.zeros((max_t + 1, num_nodes, num_nodes))
 adj[t, src, dst] = 1
 
 val_start_t = t[val_mask].min()
@@ -203,12 +243,8 @@ test_start_t = t[test_mask].min()
 
 # Separating train/val/test edge indices. "1/-1" is added to let each set also predicts the output of last day of week
 train_adj = adj[:val_start_t]
-val_adj = adj[val_start_t: test_start_t + 1]
-test_adj = adj[test_start_t-1:]
-
-train_set = SnapshotDataset(train_adj)
-val_set = SnapshotDataset(val_adj)
-test_set = SnapshotDataset(test_adj)
+val_adj = adj[val_start_t: test_start_t]
+test_adj = adj[test_start_t:]
 
 metric = "mrr"
 
@@ -222,18 +258,15 @@ gnn = MultiLayerEGCNO(
         EMB_DIM,
         args.improved,
         args.cached,
-        args.normalize))
-link_pred = torch.nn.Sequential(
-    torch.nn.Linear(EMB_DIM, EMB_DIM),
-    torch.nn.ReLU(),
-    torch.nn.Linear(EMB_DIM, 1),
-    torch.nn.Sigmoid())
+        args.normalize),
+        inp_dim=node_feat.size(1))
+link_pred = LinkPredictor(EMB_DIM, num_layers=2)
 
 model = {'gnn': gnn,
          'link_pred': link_pred}
 
 optimizer = torch.optim.Adam(
-    set(model['memory'].parameters()) | set(model['gnn'].parameters()) | set(model['link_pred'].parameters()),
+    set(model['gnn'].parameters()) | set(model['link_pred'].parameters()),
     lr=LR,
 )
 criterion = torch.nn.BCELoss()
@@ -279,7 +312,7 @@ for run_idx in range(NUM_RUNS):
     for epoch in range(1, NUM_EPOCH + 1):
         # training
         start_epoch_train = timeit.default_timer()
-        loss = train()
+        loss, A = train()
         end_epoch_train = timeit.default_timer()
         print(
             f"Epoch: {epoch:02d}, Loss: {loss:.4f}, Training elapsed Time (s): {end_epoch_train - start_epoch_train: .4f}"
@@ -303,7 +336,7 @@ for run_idx in range(NUM_RUNS):
 
         # validation
         start_val = timeit.default_timer()
-        perf_metric_val = test(val_set, neg_sampler, split_mode="val")
+        perf_metric_val, A = test(neg_sampler, split_mode="val", out_2d=A, start_time=val_start_t)
         end_val = timeit.default_timer()
         print(f"\tValidation {metric}: {perf_metric_val: .4f}")
         print(f"\tValidation: Elapsed time (s): {end_val - start_val: .4f}")
@@ -327,7 +360,7 @@ for run_idx in range(NUM_RUNS):
 
     # final testing
     start_test = timeit.default_timer()
-    perf_metric_test = test(test_set, neg_sampler, split_mode="test")
+    perf_metric_test, _ = test(neg_sampler, split_mode="test", out_2d=A, start_time=test_start_t)
 
     print(f"INFO: Test: Evaluation Setting: >>> ONE-VS-MANY <<< ")
     print(f"\tTest: {metric}: {perf_metric_test: .4f}")

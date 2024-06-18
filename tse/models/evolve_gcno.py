@@ -13,9 +13,10 @@ class EvolveGCNParams:
     cached: bool = False
     normalize: bool = True
 
-class MultiLayerEGCNO(RecurrentGNN):
-    def __init__(self, num_units: int, base_args: EvolveGCNParams) -> None:
+class MultiLayerEGCNO(RecurrentGNN, torch.nn.Module):
+    def __init__(self, num_units: int, base_args: EvolveGCNParams, inp_dim: int) -> None:
         super(MultiLayerEGCNO, self).__init__()
+        super(RecurrentGNN, self).__init__()
 
         self.base_args = base_args
         self.units: nn.ModuleList[EvolveGCNO] = nn.ModuleList([])
@@ -24,8 +25,12 @@ class MultiLayerEGCNO(RecurrentGNN):
                 EvolveGCNO(**asdict(self.base_args), add_self_loops=False)
                 )
         
-    def forward(self, edge_index: torch.Tensor, X: torch.Tensor) -> torch.Tensor:
+        self.lin = nn.Linear(inp_dim, base_args.in_channels)
+        
+    def forward(self, X: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+        X = self.lin(X)
+        
         for unit in self.units:
-            X = unit(edge_index, X)
+            X = unit(X, edge_index)
         
         return X
