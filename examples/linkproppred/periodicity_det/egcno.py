@@ -119,7 +119,6 @@ def train():
         trainA.fill_diagonal_(0)
 
         prev_edge_index = prev_edge_index.to(device)
-
         optimizer.zero_grad()
 
         z = model['gnn'](
@@ -142,8 +141,8 @@ def train():
 
         # Predicted edge index
         out_2d.fill_(torch.nan)
-        out_2d[cur_src, cur_dst] = pos_pred.squeeze(-1).detach()
-        out_2d[neg_src, neg_dst] = neg_pred.squeeze(-1).detach()
+        out_2d[cur_src, cur_dst] = pos_pred.squeeze(-1).detach().cpu()
+        out_2d[neg_src, neg_dst] = neg_pred.squeeze(-1).detach().cpu()
         out_2d.fill_diagonal_(0)  # Model does not predict self-loop edges
 
         # Valid number assertion
@@ -196,8 +195,8 @@ def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tens
         neg_pred = model['link_pred'](z[neg_src], z[neg_dst])
 
         out_2d.fill_(torch.nan)
-        out_2d[pos_src, pos_dst] = pos_pred.squeeze(-1).detach()
-        out_2d[neg_src, neg_dst] = neg_pred.squeeze(-1).detach()
+        out_2d[pos_src, pos_dst] = pos_pred.squeeze(-1).detach().cpu()
+        out_2d[neg_src, neg_dst] = neg_pred.squeeze(-1).detach().cpu()
         out_2d.fill_diagonal_(0)  # Model does not predict self-loop edges
 
         # Valid number assertion
@@ -313,6 +312,9 @@ gnn = MultiLayerEGCNO(
         inp_dim=node_feat.size(1))
 link_pred = LinkPredictor(EMB_DIM, num_layers=2)
 
+gnn.to(device)
+link_pred.to(device)
+
 model = {'gnn': gnn,
          'link_pred': link_pred}
 
@@ -348,7 +350,7 @@ for run_idx in range(NUM_RUNS):
 
     # define an early stopper
     save_model_dir = f'{osp.dirname(osp.abspath(__file__))}/saved_models/'
-    save_model_id = f'{MODEL_NAME}_{DATA}_{SEED}_{run_idx}'
+    save_model_id = f'{MODEL_NAME}_{DATA}_{SEED}_{run_idx}_{EMB_DIM}_{NUM_UNITS}_{args.node_feat}'
     early_stopper = EarlyStopMonitor(save_model_dir=save_model_dir, save_model_id=save_model_id, 
                                     tolerance=TOLERANCE, patience=PATIENCE)
 
