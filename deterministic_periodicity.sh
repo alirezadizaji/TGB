@@ -1,10 +1,20 @@
 #!/bin/bash
-NUM_WEEKS=2w
+#SBATCH --job-name=det_periodicity
+#SBATCH --output=logs/O_dp.txt
+#SBATCH --error=logs/E_dp.txt
+#SBATCH --ntasks=1
+#SBATCH --time=02:00:00
+#SBATCH --mem=4G
+#SBATCH --gpus=1
+#SBATCH --cpus-per-task=1
+#SBATCH --partition=main
+
+NUM_WEEKS=20w
 
 declare -a datasets=(er-clique-$NUM_WEEKS)
 DATA_LOC=./TGB/tse/data/
 
-cd "/Users/gil-estel/Desktop/MILA/Research/Temporal Graph" &&\
+cd /home/mila/a/alireza.dizaji/lab &&\
 python -m TGB.tse.dataset.deterministic_periodicity -c ./TGB/tse/dataset/config/deterministic-periodicity.yml -s ./TGB/tse/data
 
 # # TGN scripts
@@ -50,9 +60,9 @@ cd "/Users/gil-estel/Desktop/MILA/Research/Temporal Graph"
 for data in "${datasets[@]}"
 do
     echo "@@@ RUNNING EvolveGCNO on $data @@@"
-    for NUM_UNITS in 2
+    for NUM_UNITS in 2 4 8 16
     do
-        for IN_CHANNELS in 512
+        for IN_CHANNELS in 64 128 256 512
         do
             echo "^^^ Number of units: $NUM_UNITS; number of channels: $IN_CHANNELS ^^^"
             python -m $EGCNO_SCRIPT -d $data --data-loc $DATA_LOC --node-feat $NODE_FEAT --num-units $NUM_UNITS --in-channels $IN_CHANNELS
