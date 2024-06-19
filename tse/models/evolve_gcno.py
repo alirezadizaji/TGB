@@ -4,8 +4,6 @@ import torch
 from torch import nn
 from torch_geometric_temporal import EvolveGCNO
 
-from .recurrent_gnn import RecurrentGNN
-
 @dataclass
 class EvolveGCNParams:
     in_channels: int
@@ -13,10 +11,9 @@ class EvolveGCNParams:
     cached: bool = False
     normalize: bool = True
 
-class MultiLayerEGCNO(RecurrentGNN, torch.nn.Module):
+class MultiLayerEGCNO(torch.nn.Module):
     def __init__(self, num_units: int, base_args: EvolveGCNParams, inp_dim: int) -> None:
         super(MultiLayerEGCNO, self).__init__()
-        super(RecurrentGNN, self).__init__()
 
         self.base_args = base_args
         self.units: nn.ModuleList[EvolveGCNO] = nn.ModuleList([])

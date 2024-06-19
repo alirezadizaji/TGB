@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=det_periodicity
-#SBATCH --output=logs/O_dp.txt
-#SBATCH --error=logs/E_dp.txt
+#SBATCH --output=logs/O_dp1.txt
+#SBATCH --error=logs/E_dp1.txt
 #SBATCH --ntasks=1
 #SBATCH --time=02:00:00
 #SBATCH --mem=4G
@@ -54,18 +54,38 @@ python -m TGB.tse.dataset.deterministic_periodicity -c ./TGB/tse/dataset/config/
 # done
 
 # EGCNO scripts
-EGCNO_SCRIPT=TGB.examples.linkproppred.periodicity_det.egcno
+# EGCNO_SCRIPT=TGB.examples.linkproppred.periodicity_det.egcno
+# NODE_FEAT=ONE_HOT
+# cd "/Users/gil-estel/Desktop/MILA/Research/Temporal Graph"
+# for data in "${datasets[@]}"
+# do
+#     echo "@@@ RUNNING EvolveGCNO on $data @@@"
+#     for NUM_UNITS in 2 4 8 16
+#     do
+#         for IN_CHANNELS in 64 128 256 512
+#         do
+#             echo "^^^ Number of units: $NUM_UNITS; number of channels: $IN_CHANNELS ^^^"
+#             python -m $EGCNO_SCRIPT -d $data --data-loc $DATA_LOC --node-feat $NODE_FEAT --num-units $NUM_UNITS --in-channels $IN_CHANNELS
+#         done
+#     done
+# done
+
+# GCLSTM scripts
+GCLSTM_SCRIPT=TGB.examples.linkproppred.periodicity_det.gclstm
 NODE_FEAT=ONE_HOT
 cd "/Users/gil-estel/Desktop/MILA/Research/Temporal Graph"
 for data in "${datasets[@]}"
 do
-    echo "@@@ RUNNING EvolveGCNO on $data @@@"
-    for NUM_UNITS in 2 4 8 16
+    echo "@@@ RUNNING GCLSTM on $data @@@"
+    for NUM_UNITS in 1 2 4
     do
-        for IN_CHANNELS in 64 128 256 512
+        for OUT_CHANNELS in 256 512
         do
-            echo "^^^ Number of units: $NUM_UNITS; number of channels: $IN_CHANNELS ^^^"
-            python -m $EGCNO_SCRIPT -d $data --data-loc $DATA_LOC --node-feat $NODE_FEAT --num-units $NUM_UNITS --in-channels $IN_CHANNELS
+            for K in 1 2 4 8
+            do
+                echo "^^^ Number of units: $NUM_UNITS; number of channels: $OUT_CHANNELS; Chebyshev filter size: $K ^^^"
+                python -m $GCLSTM_SCRIPT -d $data --data-loc $DATA_LOC --node-feat $NODE_FEAT --num-units $NUM_UNITS --out-channels $OUT_CHANNELS --k-gclstm $K
+            done
         done
     done
 done
