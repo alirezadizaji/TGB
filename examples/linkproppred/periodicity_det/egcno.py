@@ -29,18 +29,18 @@ def get_args():
     parser = argparse.ArgumentParser('*** TGB ***')
     parser.add_argument('-d', '--data', type=str, help='Dataset name')
     parser.add_argument('--lr', type=float, help='Learning rate', default=1e-4)
-    parser.add_argument('--k_value', type=int, help='k_value for computing ranking metrics', default=10)
-    parser.add_argument('--num_epoch', type=int, help='Number of epochs', default=50)
+    parser.add_argument('--k-value', type=int, help='k_value for computing ranking metrics', default=10)
+    parser.add_argument('--num-epoch', type=int, help='Number of epochs', default=50)
     parser.add_argument('--node-feat', choices=NodeFeatType.list(), help='Type of node feature generation', default=NodeFeatType.CONSTANT)
     parser.add_argument('--seed', type=int, help='Random seed', default=1)
-    parser.add_argument('--num_units', type=int, help='Number of EvolveGCN units', default=1)
-    parser.add_argument('--in_channels', type=int, help='input channel dimension of EvolveGCNO', default=100)
+    parser.add_argument('--num-units', type=int, help='Number of EvolveGCN units', default=1)
+    parser.add_argument('--in-channels', type=int, help='input channel dimension of EvolveGCNO', default=100)
     parser.add_argument('--improved', type=bool, help='If True, then identity is added to adjacency matrix', default=False)
     parser.add_argument('--cached', type=bool, help='If True, then EvolveGCN caches the normalized adjacency matrix and uses it in next steps', default=False)
     parser.add_argument('--normalize', type=bool, help='If True, then EvolveGCN normalizes the adjacency matrix', default=True)
     parser.add_argument('--patience', type=float, help='Early stopper patience', default=5)
     parser.add_argument('--tolerance', type=float, help='Early stopper tolerance', default=1e-6)
-    parser.add_argument('--num_run', type=int, help='Number of iteration runs', default=1)
+    parser.add_argument('--num-run', type=int, help='Number of iteration runs', default=1)
     parser.add_argument('-l', '--data-loc', type=str, help='The location where data is stored.')
 
     try:
@@ -52,8 +52,9 @@ def get_args():
     return args, sys.argv
 
 
-def visualizer(split_mode: str, save_dir: str):
+def visualizer(save_dir: str):
     def _visualize(pred_adj: torch.Tensor, target_adj: torch.Tensor, filename: str):
+        os.makedirs(save_dir, exist_ok=True)
         pred_adj = (pred_adj >= 0.5).detach().cpu().numpy()
         pred_src, pred_dst = np.nonzero(pred_adj)
 
@@ -72,14 +73,12 @@ def visualizer(split_mode: str, save_dir: str):
         nx.draw_networkx(G2, pos, node_size=200, node_color='lightblue', ax=axes[1])
         axes[1].set_title(f"Prediction", fontsize=30)
         
-        d = os.path.join(save_dir, split_mode, "vis")
+        d = os.path.join(save_dir, "vis")
         os.makedirs(d, exist_ok=True)
         d = os.path.join(d, filename)
         plt.suptitle(filename, fontsize=40)
         plt.savefig(d)
         plt.close()
-
-    os.makedirs(save_dir, exist_ok=True)
 
     return _visualize
 
@@ -94,16 +93,14 @@ def train():
         None
             
     """
+    # This variable stores the model output. All elements should have a valid number at the end
     out_2d = torch.zeros((num_nodes, num_nodes), requires_grad=False)
 
     model['gnn'].train()
     model['link_pred'].train()
     total_loss = 0
     for cur_t, trainA in enumerate(train_adj):
-
-        # This variable stores the model output. All elements should have a valid number at the end
-        out_2d.fill_(torch.nan)
-        
+   
         prev_edge_index = None
         # At time step 0, the input graph is empty of edges
         if cur_t == 0:
@@ -115,7 +112,11 @@ def train():
         
         # Separate positive and negative pairs
         cur_src, cur_dst = torch.nonzero(trainA, as_tuple=True)
+
+        # to prevent considering self-loop edges as negative pairs, temporarily set the diagonal value of trainA as nonzero
+        trainA.fill_diagonal_(1)
         neg_src, neg_dst = torch.nonzero(trainA == 0, as_tuple=True)
+        trainA.fill_diagonal_(0)
 
         prev_edge_index = prev_edge_index.to(device)
 
@@ -140,8 +141,10 @@ def train():
         total_loss += float(loss.detach())
 
         # Predicted edge index
+        out_2d.fill_(torch.nan)
         out_2d[cur_src, cur_dst] = pos_pred.squeeze(-1).detach()
         out_2d[neg_src, neg_dst] = neg_pred.squeeze(-1).detach()
+        out_2d.fill_diagonal_(0)  # Model does not predict self-loop edges
 
         # Valid number assertion
         assert torch.all(out_2d != torch.nan)
@@ -154,7 +157,7 @@ def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tens
     model['gnn'].eval()
     model['link_pred'].eval()
 
-    vis = visualizer(split_mode, save_dir=os.path.join(results_path, MODEL_NAME, DATA))
+    vis = visualizer(save_dir=os.path.join(results_path, MODEL_NAME, DATA, split_mode, f"NODEFEAT-{args.node_feat}_UNIT-{NUM_UNITS}_EMB-{EMB_DIM}", str(epoch)))
 
     perf_list = []
 
@@ -174,7 +177,11 @@ def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tens
         
         # Separate positive and negative pairs
         pos_src, pos_dst = torch.nonzero(evalA, as_tuple=True)
+
+        # To prevent considering self-loop edges as negative pairs, set diagonal elements as zero.
+        evalA.fill_diagonal_(1)
         neg_src, neg_dst = torch.nonzero(evalA == 0, as_tuple=True)
+        evalA.fill_diagonal_(0)
 
         pos_t = t[t == cur_t]
         neg_batch_list = neg_sampler.query_batch(pos_src, pos_dst, pos_t, split_mode=split_mode)
@@ -191,6 +198,7 @@ def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tens
         out_2d.fill_(torch.nan)
         out_2d[pos_src, pos_dst] = pos_pred.squeeze(-1).detach()
         out_2d[neg_src, neg_dst] = neg_pred.squeeze(-1).detach()
+        out_2d.fill_diagonal_(0)  # Model does not predict self-loop edges
 
         # Valid number assertion
         assert torch.all(out_2d != torch.nan)
@@ -424,6 +432,9 @@ for run_idx in range(NUM_RUNS):
                   f'test {metric}': perf_metric_test,
                   'test_time': test_time,
                   'train_val_total_time': np.sum(np.array(train_times_l)) + np.sum(np.array(val_times_l)),
+                  'num_units': NUM_UNITS,
+                  'embedding_dim': EMB_DIM,
+                  'node_feat': args.node_feat,
                   }, 
     results_filename)
 
