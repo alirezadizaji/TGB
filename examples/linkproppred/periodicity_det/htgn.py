@@ -10,14 +10,14 @@ import os
 import os.path as osp
 from pathlib import Path
 import sys
-from torch.nn import LSTM
+
 import numpy as np
 import torch
 
 from ....tgb.linkproppred.negative_sampler import NegativeEdgeSampler
 from ....tgb.utils.utils import set_random_seed, save_results
 from ....tgb.linkproppred.evaluate import Evaluator
-from ....tse import MultiLayerGCLSTM, GCLSTMParam, LinkPredictor, NodeFeatType, NodeFeatGenerator
+from ....tse import HTGN, LinkPredictor, NodeFeatType, NodeFeatGenerator
 from ....modules.early_stopping import  EarlyStopMonitor
 
 
@@ -33,13 +33,25 @@ def get_args():
     parser.add_argument('--num-epoch', type=int, help='Number of epochs', default=50)
     parser.add_argument('--node-feat', choices=NodeFeatType.list(), help='Type of node feature generation', default=NodeFeatType.CONSTANT)
     parser.add_argument('--seed', type=int, help='Random seed', default=1)
-    parser.add_argument('--num-units', type=int, help='Number of GCLSTM units to stack', default=1)
-    parser.add_argument('--out-channels', type=int, help='Output channel dimension of GCLSTM', default=100)
-    parser.add_argument('--k-gclstm', type=int, help='Chebyshev filter size', default=1)
+    parser.add_argument('--out-channels', type=int, help='Output channel dimension of HTGN', default=100) ##
     parser.add_argument('--patience', type=float, help='Early stopper patience', default=5)
     parser.add_argument('--tolerance', type=float, help='Early stopper tolerance', default=1e-6)
     parser.add_argument('--num-run', type=int, help='Number of iteration runs', default=1)
     parser.add_argument('-l', '--data-loc', type=str, help='The location where data is stored.')
+
+    ##### HTGN specific #####
+    parser.add_argument('--num_nodes', type=int, default=50, help='num of nodes')
+    parser.add_argument('--nfeat', type=int, default=50, help='dim of input feature')
+    parser.add_argument('--model', type=str, default='HTGN', help='model name')
+    parser.add_argument('--use-gru', type=bool, default=True, help='use gru or not')
+    parser.add_argument('--use-hta', type=int, default=1, help='use hta or not, default: 1')
+    parser.add_argument('--manifold', type=str, default='PoincareBall', help='Hyperbolic model')
+    parser.add_argument('--nb-window', type=int, default=5, help='the length of window') ##
+    parser.add_argument('--dropout', type=float, default=0.2, help='dropout rate (1 - keep probability).')
+    parser.add_argument('--heads', type=int, default=1, help='attention heads.') ##
+    parser.add_argument('--curvature', type=float, default=1.0, help='curvature value')
+    parser.add_argument('--fixed-curvature', type=int, default=1, help='fixed (1) curvature or not (0)')
+    parser.add_argument('--aggregation', type=str, default='deg', help='aggregation method: [deg, att]') ##
 
     try:
         args = parser.parse_known_args()[0]
@@ -92,9 +104,6 @@ def train():
         None
             
     """
-    h0 = torch.zeros((args.num_units, num_nodes, EMB_DIM)).to(device)
-    c0 = torch.zeros((args.num_units, num_nodes, EMB_DIM)).to(device)
-
     # This variable stores the model output. All elements should have a valid number at the end
     out_2d = torch.zeros((num_nodes, num_nodes), requires_grad=False)
 
@@ -123,12 +132,9 @@ def train():
         prev_edge_index = prev_edge_index.to(device)
         optimizer.zero_grad()
 
-        h1, c1, h = model['gnn'](
-            node_feat,
+        z = model['gnn'](
             prev_edge_index.long(),
-            h0,
-            c0)
-        z = h
+            node_feat)
 
         pos_pred: torch.Tensor = model['link_pred'](z[cur_src], z[cur_dst])
         neg_pred: torch.Tensor = model['link_pred'](z[neg_src], z[neg_dst])
@@ -153,19 +159,15 @@ def train():
         # Valid number assertion
         assert torch.all(out_2d != torch.nan)
 
-        h0 = h1.detach()
-        c0 = c1.detach()
-        
-
-    return total_loss / train_adj.size(0), out_2d, h0, c0
+    return total_loss / train_adj.size(0), out_2d
 
 
 @torch.no_grad()
-def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tensor, h0: torch.Tensor, c0: torch.Tensor, start_time: int):
+def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tensor, start_time: int):
     model['gnn'].eval()
     model['link_pred'].eval()
 
-    vis = visualizer(save_dir=os.path.join(results_path, MODEL_NAME, DATA, split_mode, f"NODEFEAT-{args.node_feat}_UNIT-{NUM_UNITS}_EMB-{EMB_DIM}_K-{args.k_gclstm}", str(epoch)))
+    vis = visualizer(save_dir=os.path.join(results_path, MODEL_NAME, DATA, split_mode, f"NODEFEAT-{args.node_feat}_EMB-{EMB_DIM}_HEADS-{NHEADS}_NW-{NB_WINDOW}_AGG-{AGG}", str(epoch)))
 
     perf_list = []
 
@@ -195,12 +197,9 @@ def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tens
         neg_batch_list = neg_sampler.query_batch(pos_src, pos_dst, pos_t, split_mode=split_mode)
 
         prev_edge_index = prev_edge_index.to(device)
-        h1, c1, h = model['gnn'](
-            node_feat,
-            prev_edge_index,
-            h0,
-            c0)
-        z = h
+        z = model['gnn'](
+            prev_edge_index.long(),
+            node_feat)
 
         # Predicted edge index
         pos_pred = model['link_pred'](z[pos_src], z[pos_dst])
@@ -239,17 +238,14 @@ def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tens
             }
             perf_list.append(evaluator.eval(input_dict)[metric])
 
-        h0 = h1.detach()
-        c0 = c1.detach()
- 
     perf_metrics = float(torch.tensor(perf_list).mean())
 
-       
-    return perf_metrics, out_2d, h0, c0
+    return perf_metrics, out_2d
 
 # ==========
 # ==========
 # ==========
+
 
 # Start...
 start_overall = timeit.default_timer()
@@ -264,7 +260,9 @@ LR = args.lr
 K_VALUE = args.k_value  
 NUM_EPOCH = args.num_epoch
 EMB_DIM = args.out_channels
-NUM_UNITS = args.num_units
+NB_WINDOW = args.nb_window
+NHEADS = args.heads
+AGG = args.aggregation
 SEED = args.seed
 TOLERANCE = args.tolerance
 PATIENCE = args.patience
@@ -274,7 +272,7 @@ NUM_RUNS = args.num_run
 DATA_LOC = args.data_loc
 
 
-MODEL_NAME = 'GCLSTM'
+MODEL_NAME = 'HTGN'
 # ==========
 
 # set the device
@@ -317,12 +315,7 @@ metric = "mrr"
 min_dst_idx, max_dst_idx = int(dst.min()), int(dst.max())
 
 ##############  MODELS  ############
-gnn = MultiLayerGCLSTM(
-    num_units=NUM_UNITS, 
-    gclstm_param=GCLSTMParam(
-        in_channels=node_feat.size(1),
-        out_channels=EMB_DIM,
-        K=args.k_gclstm))
+gnn = HTGN(args, device, heads=NHEADS, nb_window=NB_WINDOW, aggregation=AGG, nout=EMB_DIM)
 link_pred = LinkPredictor(EMB_DIM, num_layers=2)
 
 gnn.to(device)
@@ -363,7 +356,7 @@ for run_idx in range(NUM_RUNS):
 
     # define an early stopper
     save_model_dir = f'{osp.dirname(osp.abspath(__file__))}/saved_models/'
-    save_model_id = f'{MODEL_NAME}_{DATA}_{SEED}_{run_idx}_{EMB_DIM}_{NUM_UNITS}_{args.k_gclstm}_{args.node_feat}'
+    save_model_id = f'{MODEL_NAME}_{DATA}_{SEED}_{run_idx}_{EMB_DIM}_{NHEADS}_{NB_WINDOW}_{AGG}_{args.node_feat}'
     early_stopper = EarlyStopMonitor(save_model_dir=save_model_dir, save_model_id=save_model_id, 
                                     tolerance=TOLERANCE, patience=PATIENCE)
 
@@ -378,7 +371,7 @@ for run_idx in range(NUM_RUNS):
     for epoch in range(1, NUM_EPOCH + 1):
         # training
         start_epoch_train = timeit.default_timer()
-        loss, A, h0, c0 = train()
+        loss, A = train()
         end_epoch_train = timeit.default_timer()
         print(
             f"Epoch: {epoch:02d}, Loss: {loss:.4f}, Training elapsed Time (s): {end_epoch_train - start_epoch_train: .4f}"
@@ -402,7 +395,7 @@ for run_idx in range(NUM_RUNS):
 
         # validation
         start_val = timeit.default_timer()
-        perf_metric_val, A, h0, c0 = test(neg_sampler, split_mode="val", out_2d=A, h0=h0, c0=c0, start_time=val_start_t)
+        perf_metric_val, A = test(neg_sampler, split_mode="val", out_2d=A, start_time=val_start_t)
         end_val = timeit.default_timer()
         print(f"\tValidation {metric}: {perf_metric_val: .4f}")
         print(f"\tValidation: Elapsed time (s): {end_val - start_val: .4f}")
@@ -426,7 +419,7 @@ for run_idx in range(NUM_RUNS):
 
     # final testing
     start_test = timeit.default_timer()
-    perf_metric_test, *_ = test(neg_sampler, split_mode="test", out_2d=A, h0=h0, c0=c0, start_time=test_start_t)
+    perf_metric_test, _ = test(neg_sampler, split_mode="test", out_2d=A, start_time=test_start_t)
 
     print(f"INFO: Test: Evaluation Setting: >>> ONE-VS-MANY <<< ")
     print(f"\tTest: {metric}: {perf_metric_test: .4f}")
@@ -447,10 +440,11 @@ for run_idx in range(NUM_RUNS):
                   f'test {metric}': perf_metric_test,
                   'test_time': test_time,
                   'train_val_total_time': np.sum(np.array(train_times_l)) + np.sum(np.array(val_times_l)),
-                  'num_units': NUM_UNITS,
+                  'nheads': NHEADS,
                   'embedding_dim': EMB_DIM,
+                  'aggregation': AGG,
+                  'nb_window': NB_WINDOW,
                   'node_feat': args.node_feat,
-                  'k_gclstm': args.k_gclstm,
                   }, 
     results_filename)
 

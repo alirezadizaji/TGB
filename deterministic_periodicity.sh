@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=det_periodicity
-#SBATCH --output=logs/O_dp1.txt
-#SBATCH --error=logs/E_dp1.txt
+#SBATCH --output=logs/O_htgn1.txt
+#SBATCH --error=logs/E_htgn1.txt
 #SBATCH --ntasks=1
 #SBATCH --time=02:00:00
 #SBATCH --mem=4G
@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --partition=main
 
-NUM_WEEKS=20w
+NUM_WEEKS=2w
 
 declare -a datasets=(er-clique-$NUM_WEEKS)
 DATA_LOC=./TGB/tse/data/
@@ -70,22 +70,45 @@ python -m TGB.tse.dataset.deterministic_periodicity -c ./TGB/tse/dataset/config/
 #     done
 # done
 
-# GCLSTM scripts
-GCLSTM_SCRIPT=TGB.examples.linkproppred.periodicity_det.gclstm
+# # GCLSTM scripts
+# GCLSTM_SCRIPT=TGB.examples.linkproppred.periodicity_det.gclstm
+# NODE_FEAT=ONE_HOT
+# cd "/Users/gil-estel/Desktop/MILA/Research/Temporal Graph"
+# for data in "${datasets[@]}"
+# do
+#     echo "@@@ RUNNING GCLSTM on $data @@@"
+#     for NUM_UNITS in 1 2 4
+#     do
+#         for OUT_CHANNELS in 256 512
+#         do
+#             for K in 1 2 4 8
+#             do
+#                 echo "^^^ Number of units: $NUM_UNITS; number of channels: $OUT_CHANNELS; Chebyshev filter size: $K ^^^"
+#                 python -m $GCLSTM_SCRIPT -d $data --data-loc $DATA_LOC --node-feat $NODE_FEAT --num-units $NUM_UNITS --out-channels $OUT_CHANNELS --k-gclstm $K
+#             done
+#         done
+#     done
+# done
+
+# HTGN scripts
+HTGN_SCRIPT=TGB.examples.linkproppred.periodicity_det.htgn
 NODE_FEAT=ONE_HOT
 cd "/Users/gil-estel/Desktop/MILA/Research/Temporal Graph"
 for data in "${datasets[@]}"
 do
-    echo "@@@ RUNNING GCLSTM on $data @@@"
-    for NUM_UNITS in 1 2 4
-    do
-        for OUT_CHANNELS in 256 512
+    echo "@@@ RUNNING HTGN on $data @@@"
+    for OUT_CHANNELS in 256 512
         do
-            for K in 1 2 4 8
-            do
-                echo "^^^ Number of units: $NUM_UNITS; number of channels: $OUT_CHANNELS; Chebyshev filter size: $K ^^^"
-                python -m $GCLSTM_SCRIPT -d $data --data-loc $DATA_LOC --node-feat $NODE_FEAT --num-units $NUM_UNITS --out-channels $OUT_CHANNELS --k-gclstm $K
-            done
+            for NB_WINDOW in 1 2 4 8
+                do
+                    for HEADS in 1 2 4
+                        do
+                            for AGG in 'deg' 'att'
+                                do
+                                    echo "^^^ number of channels: $OUT_CHANNELS; Number of windows: $NB_WINDOW; Number of heads $HEADS; Aggregation type: $AGG ^^^"
+                                    python -m $HTGN_SCRIPT -d $data --data-loc $DATA_LOC --node-feat $NODE_FEAT --out-channels $OUT_CHANNELS --nb-window $NB_WINDOW --heads $HEADS  --aggregation $AGG
+                                done
+                        done
+                done
         done
-    done
 done
