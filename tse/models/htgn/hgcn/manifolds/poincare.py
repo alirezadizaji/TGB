@@ -67,8 +67,11 @@ class PoincareBall(Manifold):
     def proj(self, x, c):
         norm = torch.clamp_min(x.norm(dim=-1, keepdim=True, p=2), self.min_norm)
         maxnorm = ((1 - self.eps[x.dtype]) / (c ** 0.5))
-        cond = norm > torch.tensor(maxnorm).to(x.device)
-        projected = x / norm * torch.tensor(maxnorm).to(x.device)
+        if not isinstance(maxnorm, torch.Tensor):
+            maxnorm = torch.tensor(maxnorm)
+        maxnorm = maxnorm.to(x.device)
+        cond = norm > maxnorm
+        projected = x / norm * maxnorm
         return torch.where(cond, projected, x)
 
     def proj_tan(self, u, p, c):
@@ -96,14 +99,21 @@ class PoincareBall(Manifold):
         return 2 / sqrt_c / lam * artanh(sqrt_c * sub_norm) * sub / sub_norm
 
     def expmap0(self, u, c):
-        sqrt_c = torch.tensor(c ** 0.5).to(u.device)
+        if not isinstance(c, torch.Tensor):
+            c = torch.tensor(c)
+        c = c.to(u.device)
+
+        sqrt_c = c ** 0.5
         u_norm = torch.clamp_min(u.norm(dim=-1, p=2, keepdim=True), self.min_norm)
         gamma_1 = tanh(sqrt_c * u_norm) * u / (sqrt_c * u_norm)
         return gamma_1
 
     def logmap0(self, p, c):
         p = p.to("cuda:0")
-        c = torch.tensor(c).to("cuda:0")
+        if not isinstance(c, torch.Tensor):
+            c = torch.tensor(c)
+        c = c.to("cuda:0")
+
         sqrt_c = c ** 0.5
         p_norm = p.norm(dim=-1, p=2, keepdim=True).clamp_min(self.min_norm)
         scale = 1. / sqrt_c * artanh(sqrt_c * p_norm) / p_norm
