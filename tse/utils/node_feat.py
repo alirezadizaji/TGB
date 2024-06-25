@@ -9,7 +9,7 @@ class NodeFeatGenerator:
         self.type = type
         self.emb_dim: int = emb_dim
     
-    def __call__(self, num_nodes: int) -> Any:
+    def __call__(self, num_nodes: int) -> torch.Tensor:
         node_feat = None
 
         if self.type == NodeFeatType.CONSTANT:

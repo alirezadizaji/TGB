@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=det_periodicity
-#SBATCH --output=logs/O_htgn1.txt
-#SBATCH --error=logs/E_htgn1.txt
+#SBATCH --output=logs/O2_htgn.txt
+#SBATCH --error=logs/E2_htgn.txt
 #SBATCH --ntasks=1
 #SBATCH --time=02:00:00
 #SBATCH --mem=4G
@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --partition=main
 
-NUM_WEEKS=2w
+NUM_WEEKS=20w
 
 declare -a datasets=(er-clique-$NUM_WEEKS)
 DATA_LOC=./TGB/tse/data/
@@ -24,7 +24,7 @@ python -m TGB.tse.dataset.deterministic_periodicity -c ./TGB/tse/dataset/config/
 # TIME_DIM=100
 # EMB_DIM=100
 
-# cd "/Users/gil-estel/Desktop/MILA/Research/Temporal Graph" 
+# cd "/Users/gil-estel/Desktop/MILA/Research/TGB" 
 # for data in "${datasets[@]}"
 # do
 #     echo "@@@ RUNNING TGN on $data @@@"
@@ -36,7 +36,7 @@ python -m TGB.tse.dataset.deterministic_periodicity -c ./TGB/tse/dataset/config/
 # MEM_MODE=fixed_time_window
 # TIME_WINDOW_RATIO=0.15
 
-# cd "/Users/gil-estel/Desktop/MILA/Research/Temporal Graph"
+# cd "/Users/gil-estel/Desktop/MILA/Research/TGB"
 # for data in "${datasets[@]}"
 # do
 #     echo "@@@ RUNNING EDGEBANK on $data @@@"
@@ -46,7 +46,7 @@ python -m TGB.tse.dataset.deterministic_periodicity -c ./TGB/tse/dataset/config/
 # # DyRep scripts
 # DR_SCRIPT=TGB.examples.linkproppred.periodicity_det.dyrep
 
-# cd "/Users/gil-estel/Desktop/MILA/Research/Temporal Graph"
+# cd "/Users/gil-estel/Desktop/MILA/Research/TGB"
 # for data in "${datasets[@]}"
 # do
 #     echo "@@@ RUNNING DYREP on $data @@@"
@@ -56,7 +56,7 @@ python -m TGB.tse.dataset.deterministic_periodicity -c ./TGB/tse/dataset/config/
 # EGCNO scripts
 # EGCNO_SCRIPT=TGB.examples.linkproppred.periodicity_det.egcno
 # NODE_FEAT=ONE_HOT
-# cd "/Users/gil-estel/Desktop/MILA/Research/Temporal Graph"
+# cd "/Users/gil-estel/Desktop/MILA/Research/TGB"
 # for data in "${datasets[@]}"
 # do
 #     echo "@@@ RUNNING EvolveGCNO on $data @@@"
@@ -73,7 +73,7 @@ python -m TGB.tse.dataset.deterministic_periodicity -c ./TGB/tse/dataset/config/
 # # GCLSTM scripts
 # GCLSTM_SCRIPT=TGB.examples.linkproppred.periodicity_det.gclstm
 # NODE_FEAT=ONE_HOT
-# cd "/Users/gil-estel/Desktop/MILA/Research/Temporal Graph"
+# cd "/Users/gil-estel/Desktop/MILA/Research/TGB"
 # for data in "${datasets[@]}"
 # do
 #     echo "@@@ RUNNING GCLSTM on $data @@@"
@@ -93,22 +93,39 @@ python -m TGB.tse.dataset.deterministic_periodicity -c ./TGB/tse/dataset/config/
 # HTGN scripts
 HTGN_SCRIPT=TGB.examples.linkproppred.periodicity_det.htgn
 NODE_FEAT=ONE_HOT
-cd "/Users/gil-estel/Desktop/MILA/Research/Temporal Graph"
+cd "/Users/gil-estel/Desktop/MILA/Research/TGB"
 for data in "${datasets[@]}"
 do
     echo "@@@ RUNNING HTGN on $data @@@"
     for OUT_CHANNELS in 256 512
+    do
+        for NB_WINDOW in 1 2 4 8
         do
-            for NB_WINDOW in 1 2 4 8
+            for HEADS in 1 2 4
+            do
+                for AGG in 'deg' 'att'
                 do
-                    for HEADS in 1 2 4
-                        do
-                            for AGG in 'deg' 'att'
-                                do
-                                    echo "^^^ number of channels: $OUT_CHANNELS; Number of windows: $NB_WINDOW; Number of heads $HEADS; Aggregation type: $AGG ^^^"
-                                    python -m $HTGN_SCRIPT -d $data --data-loc $DATA_LOC --node-feat $NODE_FEAT --out-channels $OUT_CHANNELS --nb-window $NB_WINDOW --heads $HEADS  --aggregation $AGG
-                                done
-                        done
+                    echo "^^^ number of channels: $OUT_CHANNELS; Number of windows: $NB_WINDOW; Number of heads $HEADS; Aggregation type: $AGG ^^^"
+                    python -m $HTGN_SCRIPT -d $data --data-loc $DATA_LOC --node-feat $NODE_FEAT --out-channels $OUT_CHANNELS --nb-window $NB_WINDOW --heads $HEADS  --aggregation $AGG
                 done
+            done
         done
+    done
 done
+
+# # GCN scripts
+# GCN_SCRIPT=TGB.examples.linkproppred.periodicity_det.gcn
+# NODE_FEAT=ONE_HOT
+# cd "/Users/gil-estel/Desktop/MILA/Research/TGB"
+# for data in "${datasets[@]}"
+# do
+#     echo "@@@ RUNNING GCN on $data @@@"
+#     for IN_CHANNELS in 256 512
+#     do
+#         for NUM_UNITS in 1 2 4 8
+#         do
+#             echo "^^^ number of channels: $IN_CHANNELS; Number of layers: $NUM_UNITS ^^^"
+#             python -m $GCN_SCRIPT -d $data --data-loc $DATA_LOC --node-feat $NODE_FEAT --in-channels $IN_CHANNELS --num-units $NUM_UNITS
+#         done
+#     done
+# done
