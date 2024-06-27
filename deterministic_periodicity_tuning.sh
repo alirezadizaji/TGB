@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=det_periodicity
-#SBATCH --output=logs/O2_htgn.txt
-#SBATCH --error=logs/E2_htgn.txt
+#SBATCH --job-name=det_prd_tune
+#SBATCH --output=logs/O1_EB.txt
+#SBATCH --error=logs/E1_EB.txt
 #SBATCH --ntasks=1
 #SBATCH --time=02:00:00
 #SBATCH --mem=4G
@@ -32,15 +32,19 @@ python -m TGB.tse.dataset.deterministic_periodicity -c ./TGB/tse/dataset/config/
 # done
  
 # # Edge bank scripts
+# # cd "/home/mila/a/alireza.dizaji/lab/TGB"
 # EB_SCRIPT=TGB.examples.linkproppred.periodicity_det.edgebank
-# MEM_MODE=fixed_time_window
-# TIME_WINDOW_RATIO=0.15
 
-# cd "/Users/gil-estel/Desktop/MILA/Research/TGB"
 # for data in "${datasets[@]}"
 # do
-#     echo "@@@ RUNNING EDGEBANK on $data @@@"
-#     python -m $EB_SCRIPT --mem_mode $MEM_MODE --time_window_ratio $TIME_WINDOW_RATIO -d $data --data-loc $DATA_LOC
+#     for MEM_MODE in "fixed_time_window" "unlimited"
+#     do
+#         for TIME_WINDOW_RATIO in 0.15 0.2 0.3
+#         do
+#             echo "^^^ RUNNING EDGEBANK on $data; time window ratio: $TIME_WINDOW_RATIO; memory mode: $MEM_MODE ^^^"
+#             python -m $EB_SCRIPT --mem_mode $MEM_MODE --time_window_ratio $TIME_WINDOW_RATIO -d $data --data-loc $DATA_LOC
+#         done
+#     done
 # done
 
 # # DyRep scripts
@@ -90,28 +94,28 @@ python -m TGB.tse.dataset.deterministic_periodicity -c ./TGB/tse/dataset/config/
 #     done
 # done
 
-# HTGN scripts
-HTGN_SCRIPT=TGB.examples.linkproppred.periodicity_det.htgn
-NODE_FEAT=ONE_HOT
-cd "/Users/gil-estel/Desktop/MILA/Research/TGB"
-for data in "${datasets[@]}"
-do
-    echo "@@@ RUNNING HTGN on $data @@@"
-    for OUT_CHANNELS in 256 512
-    do
-        for NB_WINDOW in 1 2 4 8
-        do
-            for HEADS in 1 2 4
-            do
-                for AGG in 'deg' 'att'
-                do
-                    echo "^^^ number of channels: $OUT_CHANNELS; Number of windows: $NB_WINDOW; Number of heads $HEADS; Aggregation type: $AGG ^^^"
-                    python -m $HTGN_SCRIPT -d $data --data-loc $DATA_LOC --node-feat $NODE_FEAT --out-channels $OUT_CHANNELS --nb-window $NB_WINDOW --heads $HEADS  --aggregation $AGG
-                done
-            done
-        done
-    done
-done
+# # HTGN scripts
+# HTGN_SCRIPT=TGB.examples.linkproppred.periodicity_det.htgn
+# NODE_FEAT=ONE_HOT
+# cd "/Users/gil-estel/Desktop/MILA/Research/TGB"
+# for data in "${datasets[@]}"
+# do
+#     echo "@@@ RUNNING HTGN on $data @@@"
+#     for OUT_CHANNELS in 256 512
+#     do
+#         for NB_WINDOW in 1 2 4 8
+#         do
+#             for HEADS in 1 2 4
+#             do
+#                 for AGG in 'deg' 'att'
+#                 do
+#                     echo "^^^ number of channels: $OUT_CHANNELS; Number of windows: $NB_WINDOW; Number of heads $HEADS; Aggregation type: $AGG ^^^"
+#                     python -m $HTGN_SCRIPT -d $data --data-loc $DATA_LOC --node-feat $NODE_FEAT --out-channels $OUT_CHANNELS --nb-window $NB_WINDOW --heads $HEADS  --aggregation $AGG
+#                 done
+#             done
+#         done
+#     done
+# done
 
 # # GCN scripts
 # GCN_SCRIPT=TGB.examples.linkproppred.periodicity_det.gcn

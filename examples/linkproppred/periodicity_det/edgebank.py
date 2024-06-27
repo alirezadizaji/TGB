@@ -18,6 +18,8 @@ from pathlib import Path
 import sys
 import argparse
 
+import matplotlib.pyplot as plt
+import networkx as nx
 import torch
 
 # internal imports
@@ -28,8 +30,36 @@ from ....tgb.utils.utils import set_random_seed
 from ....tgb.utils.utils import save_results
 
 # ==================
-# ==================
-# ==================
+def visualizer(save_dir: str):
+    def _visualize(pred_adj: torch.Tensor, target_adj: torch.Tensor, filename: str):
+        os.makedirs(save_dir, exist_ok=True)
+        pred_adj = (pred_adj >= 0.5)
+        pred_src, pred_dst = np.nonzero(pred_adj)
+
+        target_src, target_dst = np.nonzero(target_adj)
+
+        G1 = nx.Graph()
+        G1.add_nodes_from(list(range(50)))
+        G1.add_edges_from(list(zip(target_src, target_dst)))
+        pos = nx.kamada_kawai_layout(G1,)
+        _, axes = plt.subplots(1, 2, figsize=(20, 10))
+        nx.draw_networkx(G1, pos, node_size=200, node_color='lightblue', ax=axes[0])
+        axes[0].set_title(f"Target", fontsize=30)
+        G2 = nx.Graph()
+        G2.add_nodes_from(list(range(50)))
+        G2.add_edges_from(list(zip(pred_src, pred_dst)))
+        nx.draw_networkx(G2, pos, node_size=200, node_color='lightblue', ax=axes[1])
+        axes[1].set_title(f"Prediction", fontsize=30)
+        
+        d = os.path.join(save_dir, "vis")
+        os.makedirs(d, exist_ok=True)
+        d = os.path.join(d, filename)
+        plt.suptitle(filename, fontsize=40)
+        plt.savefig(d)
+        plt.close()
+
+    return _visualize
+
 
 def test(data, test_mask, neg_sampler, split_mode):
     r"""
@@ -44,23 +74,30 @@ def test(data, test_mask, neg_sampler, split_mode):
     Returns:
         perf_metric: the result of the performance evaluation
     """
-    num_batches = math.ceil(len(data['src'][test_mask]) / BATCH_SIZE)
+    vis = visualizer(save_dir=os.path.join(results_path, MODEL_NAME, DATA, split_mode, MEMORY_MODE, str(TIME_WINDOW_RATIO)))
+
     perf_list = []
-    for batch_idx in tqdm(range(num_batches)):
-        start_idx = batch_idx * BATCH_SIZE
-        end_idx = min(start_idx + BATCH_SIZE, len(data['src'][test_mask]))
-        pos_src, pos_dst, pos_t = (
-            data['src'][test_mask][start_idx: end_idx],
-            data['dst'][test_mask][start_idx: end_idx],
-            data['t'][test_mask][start_idx: end_idx],
-        )
+    pred_adj = np.zeros_like(adj)
+    
+    if split_mode == "val":
+        start_idx, end_idx = val_start_t, test_start_t
+    elif split_mode == "test":
+        start_idx, end_idx = test_start_t, max_t + 1
+    
+    for ct in tqdm(range(start_idx, end_idx)):
+        mask = (t == ct)
+        pos_t = t[mask]
+        pos_src = src[mask]
+        pos_dst = dst[mask]
+
         neg_batch_list = neg_sampler.query_batch(pos_src, pos_dst, pos_t, split_mode=split_mode)
-        
+
         for idx, neg_batch in enumerate(neg_batch_list):
             query_src = np.array([int(pos_src[idx]) for _ in range(len(neg_batch) + 1)])
             query_dst = np.concatenate([np.array([int(pos_dst[idx])]), neg_batch])
 
             y_pred = edgebank.predict_link(query_src, query_dst)
+            pred_adj[pos_t[idx], pos_src[idx], pos_dst[idx]] = y_pred[0]
             # compute MRR
             input_dict = {
                 "y_pred_pos": np.array([y_pred[0]]),
@@ -68,9 +105,13 @@ def test(data, test_mask, neg_sampler, split_mode):
                 "eval_metric": [metric],
             }
             perf_list.append(evaluator.eval(input_dict)[metric])
-            
+
         # update edgebank memory after each positive batch
         edgebank.update_memory(pos_src, pos_dst, pos_t)
+
+
+    for i, idx in enumerate(range(start_idx, end_idx)):
+        vis(pred_adj[idx], adj[idx], str(i))
 
     perf_metrics = float(np.mean(perf_list))
 
@@ -118,12 +159,30 @@ data = np.load(os.path.join(DATA_LOC, DATA, "data.npz"))
 metric = "mrr"
 
 # get masks
-src = torch.tensor(data["src"])
-dst = torch.tensor(data["dst"])
-t = torch.tensor(data["t"])
-train_mask = list(data["train_mask"])
-val_mask = list(data["val_mask"])
-test_mask = list(data["test_mask"])
+src = data["src"]
+dst = data["dst"]
+t = data["t"]
+train_mask = data["train_mask"]
+val_mask = data["val_mask"]
+test_mask = data["test_mask"]
+
+max_t = t.max()
+
+if "num_nodes" in data:
+    num_nodes = data["num_nodes"]
+else:
+    num_nodes = data["node_feat"].shape[0]
+
+adj = np.zeros((max_t + 1, num_nodes, num_nodes))
+adj[t, src, dst] = 1
+
+val_start_t = t[val_mask].min()
+test_start_t = t[test_mask].min()
+
+# Separating train/val/test edge indices. "1/-1" is added to let each set also predicts the output of last day of week
+train_adj = adj[:val_start_t]
+val_adj = adj[val_start_t: test_start_t]
+test_adj = adj[test_start_t:]
 
 #data for memory in edgebank
 hist_src = np.concatenate([src[train_mask]])
@@ -139,7 +198,7 @@ edgebank = EdgeBankPredictor(
         time_window_ratio=TIME_WINDOW_RATIO)
 
 print("==========================================================")
-print(f"============*** {MODEL_NAME}: {MEMORY_MODE}: {DATA} ***==============")
+print(f"============*** {MODEL_NAME}: {MEMORY_MODE}: {TIME_WINDOW_RATIO}: {DATA} ***==============")
 print("==========================================================")
 
 evaluator = Evaluator(name=DATA)
@@ -191,6 +250,7 @@ save_results({'model': MODEL_NAME,
               'seed': SEED,
               metric: perf_metric_test,
               'test_time': test_time,
-              'tot_train_val_time': 'NA'
+              'tot_train_val_time': 'NA',
+              'time_window_ratio': TIME_WINDOW_RATIO,
               }, 
     results_filename)

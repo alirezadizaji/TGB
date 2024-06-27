@@ -163,7 +163,7 @@ def train():
 
 
 @torch.no_grad()
-def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tensor, start_time: int):
+def test(adj, neg_sampler: torch.Tensor, split_mode: str, out_2d: torch.Tensor, start_time: int):
     model['gnn'].eval()
     model['link_pred'].eval()
 
@@ -173,7 +173,7 @@ def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tens
 
     out_2d = out_2d.detach()
     
-    for i, evalA in enumerate(val_adj):
+    for i, evalA in enumerate(adj):
         cur_t = i + start_time
 
         prev_edge_index = None
@@ -181,7 +181,7 @@ def test(neg_sampler: torch.Tensor, split_mode: torch.Tensor, out_2d: torch.Tens
         if i == 0:
             prev_adj = (out_2d >= 0.5).long()
         else:
-            prev_adj = val_adj[i]
+            prev_adj = adj[i - 1]
         prev_src, prev_dst = torch.nonzero(prev_adj, as_tuple=True)
         prev_edge_index = torch.stack([prev_src, prev_dst], dim=0)
         
@@ -395,7 +395,7 @@ for run_idx in range(NUM_RUNS):
 
         # validation
         start_val = timeit.default_timer()
-        perf_metric_val, A = test(neg_sampler, split_mode="val", out_2d=A, start_time=val_start_t)
+        perf_metric_val, A = test(val_adj, neg_sampler, split_mode="val", out_2d=A, start_time=val_start_t)
         end_val = timeit.default_timer()
         print(f"\tValidation {metric}: {perf_metric_val: .4f}")
         print(f"\tValidation: Elapsed time (s): {end_val - start_val: .4f}")
@@ -419,7 +419,7 @@ for run_idx in range(NUM_RUNS):
 
     # final testing
     start_test = timeit.default_timer()
-    perf_metric_test, _ = test(neg_sampler, split_mode="test", out_2d=A, start_time=test_start_t)
+    perf_metric_test, _ = test(test_adj, neg_sampler, split_mode="test", out_2d=A, start_time=test_start_t)
 
     print(f"INFO: Test: Evaluation Setting: >>> ONE-VS-MANY <<< ")
     print(f"\tTest: {metric}: {perf_metric_test: .4f}")

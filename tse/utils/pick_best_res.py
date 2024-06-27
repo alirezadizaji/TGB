@@ -12,7 +12,8 @@ if __name__ == "__main__":
     with open(dir, "r") as f:
         data = json.load(f)
 
-
+    if not isinstance(data, list):
+        data = [data]
     metric_val = np.zeros(len(data))
     best_config = None
 

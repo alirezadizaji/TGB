@@ -1,0 +1,78 @@
+---
+# Second configuration for generating determinstic weekly periodic dataset 
+data:
+  - name: er-clique-weekdays-2w
+    seed: 5765
+    neg_sampling:
+      strategy: rnd
+      num_neg_edge: null
+    num_nodes: &n1 50
+    train_num_weeks: 2
+    permute_nodes: False 
+    directed: False
+    verbose: True
+    num_days: 5
+    graphs:
+      - days: [0, 1, 2, 3, 4]
+        source: TGB.tse.dataset.pattern
+        pattern: er_motif_weekly
+        params:
+          n: *n1
+          p: 0.01
+          motif: complete_graph
+          motif_param:
+            n: 5
+  
+  - name: er-clique-weekends-2w
+    seed: 5765
+    neg_sampling:
+      strategy: rnd
+      num_neg_edge: null
+    num_nodes: *n1
+    train_num_weeks: 2
+    permute_nodes: False 
+    directed: False
+    verbose: True
+    num_days: 2
+    graphs:
+      - days: [0, 1]
+        source: TGB.tse.dataset.pattern
+        pattern: er_motif_weekly
+
+  - name: er-clique-weekdays-20w
+    seed: 5765
+    neg_sampling:
+      strategy: rnd
+      num_neg_edge: null
+    num_nodes: *n1
+    train_num_weeks: 20
+    permute_nodes: False 
+    directed: False
+    verbose: True
+    num_days: 5
+    graphs:
+      - days: [0, 1, 2, 3, 4]
+        source: TGB.tse.dataset.pattern
+        pattern: er_motif_weekly
+        params:
+          n: *n1
+          p: 0.01
+          motif: complete_graph
+          motif_param:
+            n: 5
+  
+  - name: er-clique-weekends-20w
+    seed: 5765
+    neg_sampling:
+      strategy: rnd
+      num_neg_edge: null
+    num_nodes: *n1
+    train_num_weeks: 20
+    permute_nodes: False 
+    directed: False
+    verbose: True
+    num_days: 2
+    graphs:
+      - days: [0, 1]
+        source: TGB.tse.dataset.pattern
+        pattern: er_motif_weekly

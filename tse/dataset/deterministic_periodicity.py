@@ -57,7 +57,12 @@ def main():
             graphs = data["graphs"]
             directed = data["directed"]
             permute = data["permute_nodes"]
-        
+            
+            if "num_days" in data:
+                num_days = data["num_days"]
+            else:
+                num_days = 7
+
             fdir = os.path.join(args.save_dir, name)
             if os.path.exists(fdir):
                 print(f"\n\n=====> Skipping Data generation for {name}. Delete this directory {fdir} for regeneration", flush=True)
@@ -120,7 +125,7 @@ def main():
 
         # Generate for only one week
         pos = None
-        for day in range(7):
+        for day in range(num_days):
             A: np.ndarray = day_sample[day]
             if verbose:
                 print(f"\tVisualizing day {day} ...")
@@ -152,7 +157,7 @@ def main():
         dst = np.tile(dst, all_weeks).astype(np.int64)
         edge_feat = np.tile(edge_feat, all_weeks)[:, np.newaxis].astype(np.float32)
         ## DO NOT REORDER FOLLOWING LINES
-        start = np.arange(all_weeks) * 7
+        start = np.arange(all_weeks) * num_days
         start = np.repeat(start, t.size)
         t = np.tile(t, all_weeks).astype(np.int64)
         t = t + start

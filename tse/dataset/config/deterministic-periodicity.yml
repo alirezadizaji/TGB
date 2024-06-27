@@ -13,6 +13,7 @@ data:
     permute_nodes: False # If True, then permute node indices randomly
     directed: False # Whether the graph should be directed or not
     verbose: False # If True, then display seven samples during the week.
+    num_days: 7 # How many days a periodic week consists of
     graphs: # The "Deterministic" graph patterns that appear during weekdays. For full list of graph generations by networkx, checkout this https://networkx.org/documentation/stable/reference/generators.html
       - days: [0, 1, 2, 3, 4]
         source: networkx
